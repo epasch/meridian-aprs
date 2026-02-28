@@ -1,4 +1,4 @@
-package com.example.meridian_aprs
+package com.meridianaprs.meridian_aprs
 
 import io.flutter.embedding.android.FlutterActivity
 
