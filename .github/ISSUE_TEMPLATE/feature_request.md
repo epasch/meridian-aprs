@@ -1,20 +1,33 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
+about: Suggest a new feature or enhancement
+title: '[Feature] '
+labels: 'feature,needs-triage'
 assignees: ''
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+**Summary**
+A short, clear description of the feature.
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+**Motivation**
+Why is this needed? What problem does it solve? What APRS workflow or use case does it support?
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+**Proposed solution**
+Describe the behaviour you'd like to see.
+
+**Alternatives considered**
+Any alternative approaches you've thought about.
+
+**Affected area**
+<!-- Check all that apply -->
+- [ ] APRS-IS connection
+- [ ] KISS/TNC (USB serial)
+- [ ] KISS/BLE
+- [ ] Packet parsing (AX.25/APRS)
+- [ ] Map / station display
+- [ ] UI / screens
+- [ ] Other:
 
 **Additional context**
-Add any other context or screenshots about the feature request here.
+Any other relevant information, screenshots, or references (e.g. links to APRS spec sections).

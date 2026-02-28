@@ -1,8 +1,8 @@
 ---
 name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+about: Something isn't working correctly
+title: '[Bug] '
+labels: 'bug,needs-triage'
 assignees: ''
 
 ---
@@ -10,29 +10,26 @@ assignees: ''
 **Describe the bug**
 A clear and concise description of what the bug is.
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**To reproduce**
+Steps to reproduce the behaviour:
+1.
+2.
+3.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Expected behaviour**
+What you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Actual behaviour**
+What actually happened. Include any error messages or stack traces.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**Platform**
+- OS and version: [e.g. macOS 14.4, Android 14, iOS 17]
+- App version:
+- Connection type: [APRS-IS / KISS USB / KISS BLE / N/A]
+- TNC model (if applicable):
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Screenshots / logs**
+If applicable, add screenshots or log output.
 
 **Additional context**
-Add any other context about the problem here.
+Any other relevant information.
