@@ -1,4 +1,9 @@
-# Infra Agent — Context Brief
+---
+name: meridian-infra
+description: Use for CI/CD, GitHub configuration, tooling, automation, and repository maintenance. Covers .github/ and any build/release tooling.
+---
+
+# Meridian Infra Agent — Context Brief
 
 ## Scope
 

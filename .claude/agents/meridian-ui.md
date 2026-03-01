@@ -1,4 +1,9 @@
-# UI Agent — Context Brief
+---
+name: meridian-ui
+description: Use for all UI work — screens, widgets, map integration, design system, and anything the user sees. Covers lib/ui/ and lib/screens/.
+---
+
+# Meridian UI Agent — Context Brief
 
 ## Scope
 
@@ -15,7 +20,7 @@ Do not modify packet parsing, transport, or service logic unless explicitly aske
 
 ## Design Philosophy
 
-Meridian APRS is a **purpose-built ham radio tool**, not a generic utility app. The UI should feel modern, focused, and intentional:
+Meridian APRS is a **purpose-built ham radio tool**, not a generic utility app. The UI should feel modern, focused, and intentional — approachable for new APRS users while fully supporting advanced operators.
 
 - **Material 3** — use M3 components throughout. No legacy Material 2 patterns.
 - **Map-first** — the map is the primary interface. Station list and packet log are secondary.

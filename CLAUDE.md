@@ -85,14 +85,17 @@ These are used as **logic references only**. Do not copy code from them.
 
 ---
 
-## Agent Scopes
+## Agent Team
 
-Each sub-agent has a focused context file in `docs/agents/`:
+Project-scoped sub-agents are defined in `.claude/agents/`. Delegate to them by name:
 
-- `packet-agent.md` — AX.25/APRS parsing
-- `transport-agent.md` — APRS-IS, KISS/USB, KISS/BLE transports
-- `ui-agent.md` — screens, widgets, map integration
-- `infra-agent.md` — CI/CD, GitHub config, tooling
+| Agent | When to use |
+|---|---|
+| `meridian-core` | Cross-cutting architectural decisions, ADR logging, CLAUDE.md updates, refactoring that spans multiple layers |
+| `meridian-packet` | AX.25 and APRS packet parsing, decoding, encoding — `lib/core/packet/`, `lib/core/ax25/`, `test/packet/` |
+| `meridian-transport` | APRS-IS TCP, KISS/USB serial, KISS/BLE, transport abstractions — `lib/core/transport/` |
+| `meridian-ui` | All UI work — screens, widgets, map integration, design system — `lib/ui/`, `lib/screens/` |
+| `meridian-infra` | CI/CD, GitHub configuration, tooling, automation — `.github/` |
 
 ---
 

@@ -1,4 +1,9 @@
-# Packet Agent — Context Brief
+---
+name: meridian-packet
+description: Use for all AX.25 and APRS packet parsing, decoding, and encoding work. Covers lib/core/packet/, lib/core/ax25/, and test/packet/.
+---
+
+# Meridian Packet Agent — Context Brief
 
 ## Scope
 
