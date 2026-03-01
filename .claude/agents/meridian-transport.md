@@ -1,4 +1,9 @@
-# Transport Agent — Context Brief
+---
+name: meridian-transport
+description: Use for APRS-IS TCP connectivity, KISS TNC over USB serial, KISS TNC over BLE, and all transport layer abstractions. Covers lib/core/transport/ and platform channel glue.
+---
+
+# Meridian Transport Agent — Context Brief
 
 ## Scope
 
