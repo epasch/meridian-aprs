@@ -27,8 +27,7 @@ class StationService {
   final _stations = <String, Station>{};
 
   // Broadcast controllers.
-  final _stationController =
-      StreamController<Map<String, Station>>.broadcast();
+  final _stationController = StreamController<Map<String, Station>>.broadcast();
   final _packetController = StreamController<AprsPacket>.broadcast();
 
   // Rolling packet buffer (newest at index 0).
@@ -97,9 +96,7 @@ class StationService {
 
     // If this is a position packet, also update the station map.
     if (packet is PositionPacket) {
-      debugPrint(
-        'PARSED: ${packet.source} @ ${packet.lat}, ${packet.lon}',
-      );
+      debugPrint('PARSED: ${packet.source} @ ${packet.lat}, ${packet.lon}');
       final station = _stationFromPosition(packet);
       _stations[station.callsign] = station;
       _stationController.add(Map.unmodifiable(_stations));

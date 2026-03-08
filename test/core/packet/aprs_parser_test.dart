@@ -18,7 +18,8 @@ void main() {
     expect(
       packet,
       isA<T>(),
-      reason: 'Expected ${T.toString()} but got '
+      reason:
+          'Expected ${T.toString()} but got '
           '${packet.runtimeType}: '
           '${packet is UnknownPacket ? packet.reason : ""}',
     );
@@ -78,8 +79,14 @@ void main() {
         'N0CALL>APRS:!4903.50N/07201.75W-Test',
       );
       final after = DateTime.now().toUtc();
-      expect(p.receivedAt.isAfter(before) || p.receivedAt.isAtSameMomentAs(before), isTrue);
-      expect(p.receivedAt.isBefore(after) || p.receivedAt.isAtSameMomentAs(after), isTrue);
+      expect(
+        p.receivedAt.isAfter(before) || p.receivedAt.isAtSameMomentAs(before),
+        isTrue,
+      );
+      expect(
+        p.receivedAt.isBefore(after) || p.receivedAt.isAtSameMomentAs(after),
+        isTrue,
+      );
     });
 
     test('rawLine is preserved exactly', () {
@@ -301,9 +308,7 @@ void main() {
     });
 
     test('strips padding from addressee', () {
-      final p = expectPacketType<MessagePacket>(
-        'W1ABC>APRS::KB2DEF   :Hi',
-      );
+      final p = expectPacketType<MessagePacket>('W1ABC>APRS::KB2DEF   :Hi');
       expect(p.addressee, equals('KB2DEF'));
       expect(p.addressee, isNot(contains(' ')));
     });
@@ -317,9 +322,7 @@ void main() {
 
     test('handles ACK message', () {
       // ACK format: :CALLSIGN :ackNNN
-      final p = expectPacketType<MessagePacket>(
-        'W1ABC>APRS::KB2DEF   :ack001',
-      );
+      final p = expectPacketType<MessagePacket>('W1ABC>APRS::KB2DEF   :ack001');
       expect(p.addressee, equals('KB2DEF'));
     });
   });
@@ -466,9 +469,7 @@ void main() {
     // Real-world Mic-E packet: WB4APR-14>T2SR6Y,WIDE2-2:`(_fn"Oj/`
     // WB4APR is the inventor of APRS; his beacon is a good test vector.
     test('parses Mic-E packet (backtick DTI)', () {
-      final packet = parser.parse(
-        'WB4APR-14>T2SR6Y,WIDE2-2:`(_fn"Oj/`',
-      );
+      final packet = parser.parse('WB4APR-14>T2SR6Y,WIDE2-2:`(_fn"Oj/`');
       // The destination T2SR6Y encodes Mic-E data; packet should be MicEPacket
       // or at minimum not crash. In some edge cases the destination may not
       // be a valid Mic-E encoding and will return UnknownPacket — that is also
@@ -477,9 +478,7 @@ void main() {
     });
 
     test('Mic-E lat is in valid range', () {
-      final packet = parser.parse(
-        'WB4APR-14>T2SR6Y,WIDE2-2:`(_fn"Oj/`',
-      );
+      final packet = parser.parse('WB4APR-14>T2SR6Y,WIDE2-2:`(_fn"Oj/`');
       if (packet is MicEPacket) {
         expect(packet.lat, greaterThanOrEqualTo(-90));
         expect(packet.lat, lessThanOrEqualTo(90));
@@ -489,9 +488,7 @@ void main() {
     });
 
     test('Mic-E micEMessage is populated', () {
-      final packet = parser.parse(
-        'WB4APR-14>T2SR6Y,WIDE2-2:`(_fn"Oj/`',
-      );
+      final packet = parser.parse('WB4APR-14>T2SR6Y,WIDE2-2:`(_fn"Oj/`');
       if (packet is MicEPacket) {
         expect(packet.micEMessage, isNotEmpty);
       }
@@ -516,10 +513,7 @@ void main() {
     });
 
     test('server comment line returns UnknownPacket', () {
-      expect(
-        parser.parse('# logresp NOCALL unverified'),
-        isA<UnknownPacket>(),
-      );
+      expect(parser.parse('# logresp NOCALL unverified'), isA<UnknownPacket>());
     });
 
     test('line with no colon returns UnknownPacket', () {

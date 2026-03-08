@@ -353,10 +353,8 @@ class AprsParser {
       );
     }
 
-    final lat =
-        _ddmm(m.group(1)!, isLat: true) * (m.group(2) == 'S' ? -1 : 1);
-    final lon =
-        _ddmm(m.group(4)!, isLat: false) * (m.group(5) == 'W' ? -1 : 1);
+    final lat = _ddmm(m.group(1)!, isLat: true) * (m.group(2) == 'S' ? -1 : 1);
+    final lon = _ddmm(m.group(4)!, isLat: false) * (m.group(5) == 'W' ? -1 : 1);
     final symbolTable = m.group(3)!;
     final symbolCode = m.group(6)!;
     var comment = m.group(7)!;
@@ -576,10 +574,8 @@ class AprsParser {
       );
     }
 
-    final lat =
-        _ddmm(m.group(1)!, isLat: true) * (m.group(2) == 'S' ? -1 : 1);
-    final lon =
-        _ddmm(m.group(4)!, isLat: false) * (m.group(5) == 'W' ? -1 : 1);
+    final lat = _ddmm(m.group(1)!, isLat: true) * (m.group(2) == 'S' ? -1 : 1);
+    final lon = _ddmm(m.group(4)!, isLat: false) * (m.group(5) == 'W' ? -1 : 1);
 
     return ObjectPacket(
       rawLine: rawLine,
@@ -715,10 +711,8 @@ class AprsParser {
       );
     }
 
-    final lat =
-        _ddmm(m.group(1)!, isLat: true) * (m.group(2) == 'S' ? -1 : 1);
-    final lon =
-        _ddmm(m.group(4)!, isLat: false) * (m.group(5) == 'W' ? -1 : 1);
+    final lat = _ddmm(m.group(1)!, isLat: true) * (m.group(2) == 'S' ? -1 : 1);
+    final lon = _ddmm(m.group(4)!, isLat: false) * (m.group(5) == 'W' ? -1 : 1);
 
     return ItemPacket(
       rawLine: rawLine,
@@ -1123,7 +1117,8 @@ class AprsParser {
   /// Convert DDMM.HH string to decimal degrees.
   double _ddmm(String s, {required bool isLat}) {
     final d = isLat ? 2 : 3;
-    return double.parse(s.substring(0, d)) + double.parse(s.substring(d)) / 60.0;
+    return double.parse(s.substring(0, d)) +
+        double.parse(s.substring(d)) / 60.0;
   }
 
   // ---------------------------------------------------------------------------

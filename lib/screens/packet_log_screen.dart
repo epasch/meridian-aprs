@@ -297,21 +297,19 @@ class _PacketRow extends StatelessWidget {
 
   static String _summary(AprsPacket p) {
     return switch (p) {
-      PositionPacket() =>
-        '${_latStr(p.lat)}, ${_lonStr(p.lon)}',
-      MessagePacket() =>
-        '\u2192 ${p.addressee}: ${p.message}',
+      PositionPacket() => '${_latStr(p.lat)}, ${_lonStr(p.lon)}',
+      MessagePacket() => '\u2192 ${p.addressee}: ${p.message}',
       WeatherPacket() => _wxSummary(p),
       ObjectPacket() =>
         '${p.objectName} @ ${_latStr(p.lat)}, ${_lonStr(p.lon)}',
-      ItemPacket() =>
-        '${p.itemName} @ ${_latStr(p.lat)}, ${_lonStr(p.lon)}',
+      ItemPacket() => '${p.itemName} @ ${_latStr(p.lat)}, ${_lonStr(p.lon)}',
       StatusPacket() => p.status,
       MicEPacket() =>
         '${_latStr(p.lat)}, ${_lonStr(p.lon)} \u2022 ${p.micEMessage}',
-      UnknownPacket() => p.rawLine.length > 40
-          ? '${p.rawLine.substring(0, 40)}\u2026'
-          : p.rawLine,
+      UnknownPacket() =>
+        p.rawLine.length > 40
+            ? '${p.rawLine.substring(0, 40)}\u2026'
+            : p.rawLine,
     };
   }
 
@@ -331,7 +329,8 @@ class _PacketRow extends StatelessWidget {
       final f = p.temperature!.toStringAsFixed(0);
       parts.add('$f \u00b0F');
     }
-    if (p.windSpeed != null) parts.add('${p.windSpeed!.toStringAsFixed(0)} mph wind');
+    if (p.windSpeed != null)
+      parts.add('${p.windSpeed!.toStringAsFixed(0)} mph wind');
     if (p.humidity != null) parts.add('${p.humidity}% RH');
     return parts.isEmpty ? 'Weather' : parts.join(' / ');
   }

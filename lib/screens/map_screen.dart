@@ -127,9 +127,7 @@ class _MapScreenState extends State<MapScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => PacketLogScreen(service: _service),
-          ),
+          MaterialPageRoute(builder: (_) => PacketLogScreen(service: _service)),
         ),
         tooltip: 'Packet Log',
         child: const Icon(Icons.list_alt),

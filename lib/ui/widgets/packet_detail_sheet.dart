@@ -110,11 +110,8 @@ class PacketDetailSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   ...fields.entries.map(
-                    (e) => _FieldRow(
-                      label: e.key,
-                      value: e.value,
-                      theme: theme,
-                    ),
+                    (e) =>
+                        _FieldRow(label: e.key, value: e.value, theme: theme),
                   ),
                 ],
               ),
@@ -146,7 +143,11 @@ class PacketDetailSheet extends StatelessWidget {
     m['Source'] = p.source;
     m['Destination'] = p.destination;
     if (p.path.isNotEmpty) m['Path'] = p.path.join(', ');
-    m['Received'] = p.receivedAt.toUtc().toString().replaceFirst('.000', '').replaceAll('T', ' ');
+    m['Received'] = p.receivedAt
+        .toUtc()
+        .toString()
+        .replaceFirst('.000', '')
+        .replaceAll('T', ' ');
 
     switch (p) {
       case PositionPacket():
@@ -157,7 +158,8 @@ class PacketDetailSheet extends StatelessWidget {
         m['Symbol code'] = p.symbolCode;
         if (p.course != null) m['Course'] = '${p.course}\u00b0';
         if (p.speed != null) m['Speed'] = '${p.speed!.toStringAsFixed(1)} kt';
-        if (p.altitude != null) m['Altitude'] = '${p.altitude!.toStringAsFixed(0)} m';
+        if (p.altitude != null)
+          m['Altitude'] = '${p.altitude!.toStringAsFixed(0)} m';
         m['Messaging'] = p.hasMessaging ? 'Yes' : 'No';
         if (p.comment.isNotEmpty) m['Comment'] = p.comment;
         if (p.timestamp != null) m['Packet time'] = p.timestamp.toString();
@@ -174,15 +176,22 @@ class PacketDetailSheet extends StatelessWidget {
         if (p.lon != null) m['Longitude'] = _formatLon(p.lon!);
         if (p.temperature != null) {
           final c = (p.temperature! - 32) * 5 / 9;
-          m['Temperature'] = '${p.temperature!.toStringAsFixed(1)} \u00b0F (${c.toStringAsFixed(1)} \u00b0C)';
+          m['Temperature'] =
+              '${p.temperature!.toStringAsFixed(1)} \u00b0F (${c.toStringAsFixed(1)} \u00b0C)';
         }
         if (p.humidity != null) m['Humidity'] = '${p.humidity}%';
-        if (p.pressure != null) m['Pressure'] = '${p.pressure!.toStringAsFixed(1)} hPa';
-        if (p.windSpeed != null) m['Wind speed'] = '${p.windSpeed!.toStringAsFixed(1)} mph';
-        if (p.windDirection != null) m['Wind direction'] = '${p.windDirection}\u00b0';
-        if (p.windGust != null) m['Wind gust'] = '${p.windGust!.toStringAsFixed(1)} mph';
-        if (p.rainfall1h != null) m['Rainfall 1h'] = '${(p.rainfall1h! / 100).toStringAsFixed(2)} in';
-        if (p.rainfall24h != null) m['Rainfall 24h'] = '${(p.rainfall24h! / 100).toStringAsFixed(2)} in';
+        if (p.pressure != null)
+          m['Pressure'] = '${p.pressure!.toStringAsFixed(1)} hPa';
+        if (p.windSpeed != null)
+          m['Wind speed'] = '${p.windSpeed!.toStringAsFixed(1)} mph';
+        if (p.windDirection != null)
+          m['Wind direction'] = '${p.windDirection}\u00b0';
+        if (p.windGust != null)
+          m['Wind gust'] = '${p.windGust!.toStringAsFixed(1)} mph';
+        if (p.rainfall1h != null)
+          m['Rainfall 1h'] = '${(p.rainfall1h! / 100).toStringAsFixed(2)} in';
+        if (p.rainfall24h != null)
+          m['Rainfall 24h'] = '${(p.rainfall24h! / 100).toStringAsFixed(2)} in';
 
       case ObjectPacket():
         m['Type'] = 'Object';
@@ -218,7 +227,8 @@ class PacketDetailSheet extends StatelessWidget {
         m['Symbol code'] = p.symbolCode;
         if (p.course != null) m['Course'] = '${p.course}\u00b0';
         if (p.speed != null) m['Speed'] = '${p.speed!.toStringAsFixed(1)} kt';
-        if (p.altitude != null) m['Altitude'] = '${p.altitude!.toStringAsFixed(0)} m';
+        if (p.altitude != null)
+          m['Altitude'] = '${p.altitude!.toStringAsFixed(0)} m';
         if (p.comment.isNotEmpty) m['Comment'] = p.comment;
 
       case UnknownPacket():

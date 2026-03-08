@@ -31,16 +31,11 @@ class AprsSymbolWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Icon(
-      _iconData(symbolCode),
-      size: size,
-      color: color,
-    );
+    return Icon(_iconData(symbolCode), size: size, color: color);
   }
 
   /// Maps an APRS symbol code to the best available Material icon.
-  static IconData iconDataForSymbol(String symbolCode) =>
-      _iconData(symbolCode);
+  static IconData iconDataForSymbol(String symbolCode) => _iconData(symbolCode);
 }
 
 IconData _iconData(String symbolCode) {
