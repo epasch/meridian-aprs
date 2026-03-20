@@ -68,6 +68,12 @@ class _MeridianStatusPillState extends State<MeridianStatusPill>
     super.dispose();
   }
 
+  static String _stateLabel(ConnectionStatus s) => switch (s) {
+        ConnectionStatus.connected => 'Connected',
+        ConnectionStatus.connecting => 'Connecting',
+        ConnectionStatus.disconnected => 'Disconnected',
+      };
+
   Color _dotColor() {
     switch (widget.status) {
       case ConnectionStatus.connected:
@@ -92,7 +98,8 @@ class _MeridianStatusPillState extends State<MeridianStatusPill>
     );
 
     return Semantics(
-      label: 'Connection status: ${widget.label}',
+      label:
+          'Connection status: ${widget.label} — ${_stateLabel(widget.status)}',
       button: widget.onTap != null,
       child: InkWell(
         onTap: widget.onTap,

@@ -81,7 +81,17 @@ class _MapScreenState extends State<MapScreen> {
     _connectionStatus = _service.currentConnectionStatus;
     _service.stationUpdates.listen(_onStationsUpdated);
     _service.connectionState.listen((status) {
-      if (mounted) setState(() => _connectionStatus = status);
+      if (!mounted) return;
+      final wasConnecting = _connectionStatus == ConnectionStatus.connecting;
+      setState(() => _connectionStatus = status);
+      if (wasConnecting && status == ConnectionStatus.disconnected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not connect to APRS-IS. Check your network.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
     });
     _service.start().catchError((Object e) {
       debugPrint('APRS-IS connection failed: $e');

@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../screens/packet_log_screen.dart';
+import '../../screens/station_list_screen.dart';
 import '../../services/station_service.dart';
 import '../widgets/meridian_bottom_sheet.dart';
 import '../widgets/meridian_status_pill.dart';
@@ -94,7 +95,16 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             minExtendedWidth: 240,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 4) {
+              if (i == 1) {
+                // Stations — push full-screen station list.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        StationListScreen(service: widget.service),
+                  ),
+                );
+              } else if (i == 4) {
                 widget.onNavigateToSettings();
               } else {
                 setState(() => _selectedIndex = i);
@@ -134,6 +144,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
               mapController: widget.mapController,
               markers: widget.markers,
               tileUrl: widget.tileUrl,
+              connectionStatus: widget.connectionStatus,
               initialCenter: widget.initialCenter,
               initialZoom: widget.initialZoom,
             ),

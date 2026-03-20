@@ -76,6 +76,7 @@ class MobileScaffold extends StatelessWidget {
             mapController: mapController,
             markers: markers,
             tileUrl: tileUrl,
+            connectionStatus: connectionStatus,
             initialCenter: initialCenter,
             initialZoom: initialZoom,
           ),

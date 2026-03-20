@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../screens/packet_log_screen.dart';
+import '../../screens/station_list_screen.dart';
 import '../../services/station_service.dart';
 import '../widgets/meridian_bottom_sheet.dart';
 import '../widgets/meridian_status_pill.dart';
@@ -88,6 +89,15 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                         PacketLogScreen(service: widget.service),
                   ),
                 );
+              } else if (i == 2) {
+                // Stations — push full-screen station list.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        StationListScreen(service: widget.service),
+                  ),
+                );
               } else if (i == 5) {
                 widget.onNavigateToSettings();
               } else {
@@ -136,12 +146,21 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                     mapController: widget.mapController,
                     markers: widget.markers,
                     tileUrl: widget.tileUrl,
+                    connectionStatus: widget.connectionStatus,
                     initialCenter: widget.initialCenter,
                     initialZoom: widget.initialZoom,
                   ),
                 ),
-                // Collapsed bottom panel placeholder.
-                _BottomPanel(service: widget.service),
+                // Collapsed bottom panel — tapping opens the full packet log.
+                _BottomPanel(
+                  service: widget.service,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => PacketLogScreen(service: widget.service),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -152,32 +171,42 @@ class _TabletScaffoldState extends State<TabletScaffold> {
 }
 
 class _BottomPanel extends StatelessWidget {
-  const _BottomPanel({required this.service});
+  const _BottomPanel({required this.service, required this.onTap});
 
   final StationService service;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      height: 48,
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Icon(
-            Icons.people,
-            size: 16,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '${service.currentStations.length} stations nearby',
-            style: theme.textTheme.bodySmall?.copyWith(
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        color: theme.colorScheme.surfaceContainerHighest,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.people,
+              size: 16,
               color: theme.colorScheme.onSurfaceVariant,
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Text(
+              '${service.currentStations.length} stations nearby',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              Icons.expand_less,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }
