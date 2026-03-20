@@ -9,7 +9,9 @@ import 'package:meridian_aprs/services/station_service.dart';
 import 'helpers/fake_transport.dart';
 
 void main() {
-  testWidgets('MapScreen renders without throwing', (WidgetTester tester) async {
+  testWidgets('MapScreen renders without throwing', (
+    WidgetTester tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     final themeProvider = await ThemeProvider.create();
     final service = StationService(FakeTransport());
@@ -17,9 +19,7 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<ThemeProvider>.value(
         value: themeProvider,
-        child: MaterialApp(
-          home: MapScreen(service: service),
-        ),
+        child: MaterialApp(home: MapScreen(service: service)),
       ),
     );
 

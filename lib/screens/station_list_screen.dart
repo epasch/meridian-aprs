@@ -87,8 +87,8 @@ class _StationListBodyState extends State<StationListBody> {
         child: Text(
           'No stations heard yet',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       );
     }

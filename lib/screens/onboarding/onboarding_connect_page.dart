@@ -19,7 +19,8 @@ class OnboardingConnectPage extends StatefulWidget {
 }
 
 class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
-  int _selectedOption = 0; // 0=APRS-IS only — BLE/USB coming in future milestones
+  int _selectedOption =
+      0; // 0=APRS-IS only — BLE/USB coming in future milestones
 
   @override
   Widget build(BuildContext context) {

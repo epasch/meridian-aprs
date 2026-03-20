@@ -67,10 +67,10 @@ class _MeridianStatusPillState extends State<MeridianStatusPill>
   }
 
   static String _stateLabel(ConnectionStatus s) => switch (s) {
-        ConnectionStatus.connected => 'Connected',
-        ConnectionStatus.connecting => 'Connecting',
-        ConnectionStatus.disconnected => 'Disconnected',
-      };
+    ConnectionStatus.connected => 'Connected',
+    ConnectionStatus.connecting => 'Connecting',
+    ConnectionStatus.disconnected => 'Disconnected',
+  };
 
   Color _dotColor() {
     switch (widget.status) {

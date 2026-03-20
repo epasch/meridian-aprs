@@ -101,8 +101,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                 Navigator.push(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) =>
-                        StationListScreen(service: widget.service),
+                    builder: (_) => StationListScreen(service: widget.service),
                   ),
                 );
               } else if (i == 4) {

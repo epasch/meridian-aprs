@@ -54,8 +54,9 @@ class MeridianMap extends StatelessWidget {
             TileLayer(
               urlTemplate: tileUrl,
               userAgentPackageName: 'com.meridianaprs.app',
-              subdomains:
-                  _usesSubdomains ? const ['a', 'b', 'c', 'd'] : const [],
+              subdomains: _usesSubdomains
+                  ? const ['a', 'b', 'c', 'd']
+                  : const [],
             ),
             MarkerLayer(markers: markers),
           ],
@@ -88,9 +89,7 @@ class _ConnectingBanner extends StatelessWidget {
             SizedBox(
               width: 12,
               height: 12,
-              child: CircularProgressIndicator.adaptive(
-                strokeWidth: 2,
-              ),
+              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
             ),
             const SizedBox(width: 10),
             Text(

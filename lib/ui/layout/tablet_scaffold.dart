@@ -86,8 +86,7 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                 Navigator.push(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) =>
-                        PacketLogScreen(service: widget.service),
+                    builder: (_) => PacketLogScreen(service: widget.service),
                   ),
                 );
               } else if (i == 2) {
@@ -95,8 +94,7 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                 Navigator.push(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) =>
-                        StationListScreen(service: widget.service),
+                    builder: (_) => StationListScreen(service: widget.service),
                   ),
                 );
               } else if (i == 5) {
