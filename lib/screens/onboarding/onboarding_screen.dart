@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/transport/aprs_is_transport.dart';
+import '../../services/station_service.dart';
 import '../map_screen.dart';
 import 'onboarding_callsign_page.dart';
 import 'onboarding_connect_page.dart';
 import 'onboarding_welcome_page.dart';
+
+const String _kVersion = '0.1.0';
 
 /// Three-page onboarding flow shown on first launch.
 ///
@@ -45,14 +49,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await prefs.setInt('user_ssid', _ssid);
     await prefs.setString('user_passcode', _passcode);
     await prefs.setInt('connection_method', _connectionMethod);
+
+    final effectiveCallsign = _callsign.isNotEmpty ? _callsign : 'NOCALL';
+    final ssidSuffix = _ssid > 0 ? '-$_ssid' : '';
+    final effectivePasscode = _passcode.isEmpty ? '-1' : _passcode;
+    final mapLat = prefs.getDouble('map_last_lat') ?? 39.0;
+    final mapLon = prefs.getDouble('map_last_lon') ?? -77.0;
+
+    final transport = AprsIsTransport(
+      loginLine:
+          'user $effectiveCallsign$ssidSuffix pass $effectivePasscode vers meridian-aprs $_kVersion\r\n',
+      filterLine:
+          '#filter r/${mapLat.toStringAsFixed(1)}/${mapLon.toStringAsFixed(1)}/100\r\n',
+    );
+    final service = StationService(transport);
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => MapScreen(
-            callsign: _callsign.isNotEmpty ? _callsign : 'NOCALL',
-            passcode: _passcode,
+            service: service,
+            callsign: effectiveCallsign,
             ssid: _ssid,
+            initialLat: mapLat,
+            initialLon: mapLon,
           ),
         ),
       );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/transport/aprs_transport.dart' show ConnectionStatus;
 import '../../screens/packet_log_screen.dart';
 import '../../services/station_service.dart';
 import '../widgets/beacon_fab.dart';

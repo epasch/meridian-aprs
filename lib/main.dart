@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/transport/aprs_is_transport.dart';
 import 'screens/map_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
+import 'services/station_service.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_provider.dart';
+
+const String _kVersion = '0.1.0';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,17 +25,29 @@ Future<void> main() async {
   final mapLon = prefs.getDouble('map_last_lon') ?? -77.0;
   final mapZoom = prefs.getDouble('map_last_zoom') ?? 9.0;
 
+  final effectiveCallsign = userCallsign.isNotEmpty ? userCallsign : 'NOCALL';
+  final ssidSuffix = userSsid > 0 ? '-$userSsid' : '';
+  final effectivePasscode = userPasscode.isEmpty ? '-1' : userPasscode;
+
+  final transport = AprsIsTransport(
+    loginLine:
+        'user $effectiveCallsign$ssidSuffix pass $effectivePasscode vers meridian-aprs $_kVersion\r\n',
+    filterLine:
+        '#filter r/${mapLat.toStringAsFixed(1)}/${mapLon.toStringAsFixed(1)}/100\r\n',
+  );
+  final service = StationService(transport);
+
   runApp(
     ChangeNotifierProvider<ThemeProvider>.value(
       value: themeProvider,
       child: MeridianApp(
         onboardingComplete: onboardingComplete,
-        userCallsign: userCallsign,
-        userPasscode: userPasscode,
+        userCallsign: effectiveCallsign,
         userSsid: userSsid,
         mapLat: mapLat,
         mapLon: mapLon,
         mapZoom: mapZoom,
+        service: service,
       ),
     ),
   );
@@ -42,20 +58,20 @@ class MeridianApp extends StatelessWidget {
     super.key,
     required this.onboardingComplete,
     this.userCallsign = '',
-    this.userPasscode = '',
     this.userSsid = 0,
     this.mapLat = 39.0,
     this.mapLon = -77.0,
     this.mapZoom = 9.0,
+    required this.service,
   });
 
   final bool onboardingComplete;
   final String userCallsign;
-  final String userPasscode;
   final int userSsid;
   final double mapLat;
   final double mapLon;
   final double mapZoom;
+  final StationService service;
 
   @override
   Widget build(BuildContext context) {
@@ -68,8 +84,8 @@ class MeridianApp extends StatelessWidget {
       darkTheme: AppTheme.darkTheme,
       home: onboardingComplete
           ? MapScreen(
-              callsign: userCallsign.isNotEmpty ? userCallsign : 'NOCALL',
-              passcode: userPasscode,
+              service: service,
+              callsign: userCallsign,
               ssid: userSsid,
               initialLat: mapLat,
               initialLon: mapLon,

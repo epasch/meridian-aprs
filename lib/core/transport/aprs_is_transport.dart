@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'aprs_transport.dart';
 
+// TODO(web): replace with WebSocketTransport — see ADR-004
 class AprsIsTransport implements AprsTransport {
   final String host;
   final int port;
@@ -33,6 +36,11 @@ class AprsIsTransport implements AprsTransport {
 
   @override
   Future<void> connect() async {
+    assert(
+      !kIsWeb,
+      'AprsIsTransport uses dart:io and cannot run on web. '
+      'Implement WebSocketTransport per ADR-004.',
+    );
     _currentStatus = ConnectionStatus.connecting;
     _stateController.add(ConnectionStatus.connecting);
     try {

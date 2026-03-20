@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/transport/aprs_transport.dart' show ConnectionStatus;
 import '../theme/app_theme.dart';
 
-export '../../core/transport/aprs_transport.dart' show ConnectionStatus;
-
 /// A compact status indicator pill for the top app bar.
 ///
 /// Shows a colored dot and a label reflecting the current [ConnectionStatus].

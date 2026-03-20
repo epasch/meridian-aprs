@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/packet/station.dart';
-import '../core/transport/aprs_is_transport.dart';
 import '../core/transport/aprs_transport.dart';
 import '../services/station_service.dart';
 import '../ui/layout/responsive_layout.dart';
@@ -26,18 +25,16 @@ import 'settings_screen.dart';
 class MapScreen extends StatefulWidget {
   const MapScreen({
     super.key,
+    required this.service,
     this.callsign = 'NOCALL',
-    this.passcode = '-1',
     this.ssid = 0,
     this.initialLat = 39.0,
     this.initialLon = -77.0,
     this.initialZoom = 9.0,
   });
 
+  final StationService service;
   final String callsign;
-
-  /// APRS-IS passcode. Empty string or `'-1'` means receive-only.
-  final String passcode;
 
   /// SSID suffix (0 = no suffix, 1–15 appended as `-N`).
   final int ssid;
@@ -66,18 +63,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    final callsign =
-        widget.callsign.isNotEmpty ? widget.callsign : 'NOCALL';
-    final ssidSuffix = widget.ssid > 0 ? '-${widget.ssid}' : '';
-    final effectivePasscode =
-        widget.passcode.isEmpty ? '-1' : widget.passcode;
-    final transport = AprsIsTransport(
-      loginLine:
-          'user $callsign$ssidSuffix pass $effectivePasscode vers meridian-aprs 0.1\r\n',
-      filterLine:
-          '#filter r/${widget.initialLat.toStringAsFixed(1)}/${widget.initialLon.toStringAsFixed(1)}/100\r\n',
-    );
-    _service = StationService(transport);
+    _service = widget.service;
     _connectionStatus = _service.currentConnectionStatus;
     _service.stationUpdates.listen(_onStationsUpdated);
     _service.connectionState.listen((status) {
