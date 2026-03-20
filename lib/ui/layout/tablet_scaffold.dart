@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../screens/packet_log_screen.dart';
 import '../../services/station_service.dart';
 import '../widgets/meridian_bottom_sheet.dart';
 import '../widgets/meridian_status_pill.dart';
@@ -78,7 +79,16 @@ class _TabletScaffoldState extends State<TabletScaffold> {
             extended: false,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 4) {
+              if (i == 1) {
+                // Log — push full-screen packet log.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        PacketLogScreen(service: widget.service),
+                  ),
+                );
+              } else if (i == 5) {
                 widget.onNavigateToSettings();
               } else {
                 setState(() => _selectedIndex = i);
@@ -89,6 +99,11 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                 icon: Icon(Icons.map_outlined),
                 selectedIcon: Icon(Icons.map),
                 label: Text('Map'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.list_alt_outlined),
+                selectedIcon: Icon(Icons.list_alt),
+                label: Text('Log'),
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.people_outline),

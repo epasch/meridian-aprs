@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../screens/packet_log_screen.dart';
 import '../../services/station_service.dart';
 import '../widgets/meridian_bottom_sheet.dart';
 import '../widgets/meridian_status_pill.dart';
@@ -124,36 +125,35 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             ),
           ),
           const VerticalDivider(width: 1),
-          // Side panel — packet log / station list panel (future).
-          const _SidePanel(),
+          _PacketLogPanel(service: widget.service),
         ],
       ),
     );
   }
 }
 
-class _SidePanel extends StatelessWidget {
-  const _SidePanel();
+class _PacketLogPanel extends StatelessWidget {
+  const _PacketLogPanel({required this.service});
+
+  final StationService service;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return SizedBox(
       width: 320,
-      child: Container(
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Text(
-              'Packet Log / Stations panel coming soon',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              'Packet Log',
+              style: Theme.of(context).textTheme.titleSmall,
             ),
           ),
-        ),
+          const Divider(height: 1),
+          Expanded(child: PacketLogBody(service: service)),
+        ],
       ),
     );
   }
