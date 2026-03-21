@@ -94,6 +94,17 @@ class TncService extends ChangeNotifier {
   /// Returns available serial port names. Empty on non-desktop platforms.
   List<String> availablePorts() => SerialKissTransport.availablePorts();
 
+  /// Persist [config] as the active TNC configuration without connecting.
+  ///
+  /// Use this to save settings changes from the Settings screen. The new
+  /// config becomes [activeConfig] and is persisted to SharedPreferences.
+  /// Does not affect an in-progress connection — [disconnect] first if needed.
+  Future<void> updateConfig(TncConfig config) async {
+    _activeConfig = config;
+    await _saveConfig(config);
+    notifyListeners();
+  }
+
   /// Load the previously-persisted [TncConfig] from SharedPreferences.
   ///
   /// Call once on app startup. Does not automatically connect — the user

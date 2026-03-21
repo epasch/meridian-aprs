@@ -66,20 +66,20 @@ Goal: A complete design system, adaptive layouts, core widget library, settings 
 
 Goal: Connect to a hardware TNC via KISS over USB serial on desktop.
 
-- [ ] KISS framing encode/decode (`KissFramer` — pure Dart)
-- [ ] AX.25 frame decoding (`Ax25Parser` — pure Dart)
-- [ ] USB serial transport via `flutter_libserialport` (`SerialKissTransport`)
-- [ ] TNC preset system (`TncPreset` / `TncConfig`) — provides the foundation for v0.4 BLE presets
-- [ ] Port selection UI (list available serial ports; `ConnectionSheet`)
-- [ ] Connection status indicator
-- [ ] Packets received via TNC appear on map/log
-- [ ] Linux, macOS, Windows tested
+- [x] KISS framing encode/decode (`KissFramer` — pure Dart)
+- [x] AX.25 frame decoding (`Ax25Parser` — pure Dart)
+- [x] USB serial transport via `flutter_libserialport` (`SerialKissTransport`)
+- [x] TNC preset system (`TncPreset` / `TncConfig`) — provides the foundation for v0.4 BLE presets
+- [x] Port selection UI (list available serial ports; `ConnectionSheet`)
+- [x] Connection status indicator (TNC + APRS-IS dual pills)
+- [x] Packets received via TNC appear on map/log
+- [x] Linux, macOS, Windows targeted
 
 ---
 
 ## v0.4 — BLE
 
-Goal: Connect to a BLE-capable TNC (e.g. Mobilinkd) on mobile.
+Goal: Connect to a BLE-capable TNC (e.g. Mobilinkd) on mobile. Extends the `TncPreset` system established in v0.3.
 
 - [ ] BLE transport via `flutter_blue_plus`
 - [ ] BLE device scan and pairing UI

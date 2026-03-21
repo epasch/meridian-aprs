@@ -36,7 +36,8 @@ class TncPreset {
     id: 'mobilinkd_tnc4',
     displayName: 'Mobilinkd TNC4',
     baudRate: 115200,
-    notes: 'Connect via USB. No driver required on Linux or macOS.',
+    notes: 'Connect via USB. No driver required on Linux or macOS.\n'
+        'Windows: install the CP210x USB-to-UART driver from Silicon Labs if the port does not enumerate.',
   );
 
   /// Custom — user-defined parameters. Unlocks all serial parameter fields.

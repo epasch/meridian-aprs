@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 /// Transforms a stream of raw serial bytes into decoded AX.25 frame payloads.
 ///
 /// Implements KISS framing per the KISS TNC specification. Feed raw bytes via
@@ -58,6 +60,10 @@ class KissFramer {
           _buffer.add(_fesc);
         } else {
           // Invalid escape sequence — discard frame and wait for next FEND.
+          debugPrint(
+            'KissFramer: invalid escape sequence '
+            '0x${b.toRadixString(16).padLeft(2, '0')}, discarding frame',
+          );
           _buffer.clear();
           _inFrame = false;
         }
