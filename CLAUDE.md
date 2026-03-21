@@ -52,7 +52,7 @@ See `docs/ARCHITECTURE.md` for full detail.
 | v0.5 — Beaconing | Transmit path, position beaconing, message sending |
 | v1.0 — Polish | UI refinement, settings, documentation, onboarding |
 
-**Current status: v0.2 Packets complete. v0.3 TNC is next.**
+**Current status: v0.3 TNC in progress on `feat/v0.3-serial-tnc`.**
 
 See `docs/ROADMAP.md` for per-milestone task breakdowns.
 
@@ -163,6 +163,22 @@ Keep these files current as the project evolves:
 | `onboarding/onboarding_welcome_page.dart` | `OnboardingWelcomePage` | Page 1: logo, tagline, Get Started / skip |
 | `onboarding/onboarding_callsign_page.dart` | `OnboardingCallsignPage` | Page 2: CallsignField, SSID picker, passcode field |
 | `onboarding/onboarding_connect_page.dart` | `OnboardingConnectPage` | Page 3: APRS-IS / BLE / USB option cards, Start Listening |
+| `connection_sheet.dart` | `ConnectionSheet` | Two-section connection management sheet (APRS-IS status + TNC preset/port/connect); replaces stubs in all three scaffolds |
+
+---
+
+## Service Layer (`lib/services/`, `lib/core/transport/`, `lib/core/ax25/`)
+
+### Transport and TNC files (v0.3+)
+
+| File | Class / Symbol | Description |
+|---|---|---|
+| `lib/core/transport/tnc_preset.dart` | `TncPreset` | Immutable static preset model + `TncPreset.all` registry of known TNC hardware |
+| `lib/core/transport/tnc_config.dart` | `TncConfig` | Runtime serial + KISS configuration; `fromPreset` factory; `toPrefsMap`/`fromPrefsMap` for SharedPreferences persistence |
+| `lib/core/transport/kiss_framer.dart` | `KissFramer` | Pure Dart KISS framer; stateful `addBytes` stream processor; static `encode` method |
+| `lib/core/ax25/ax25_parser.dart` | `Ax25Parser` | Pure Dart AX.25 UI frame decoder; sealed `Ax25ParseResult` (`Ax25Ok` \| `Ax25Err`); never throws |
+| `lib/core/transport/serial_kiss_transport.dart` | `SerialKissTransport` | Implements `AprsTransport`; platform-conditional export; desktop only (Linux/macOS/Windows) |
+| `lib/services/tnc_service.dart` | `TncService` | ChangeNotifier; owns `SerialKissTransport` lifecycle; bridges decoded lines to `StationService.ingestLine` |
 
 ---
 
