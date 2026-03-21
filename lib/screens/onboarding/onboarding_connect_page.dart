@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import '../../ui/theme/app_theme.dart';
+import '../../theme/meridian_colors.dart';
 
 /// Third onboarding page — connection method selection.
 ///
@@ -93,8 +93,8 @@ class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
                 onPressed: () => widget.onStartListening(_selectedOption),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: AppColors.surfaceLight,
+                  backgroundColor: MeridianColors.signal,
+                  foregroundColor: Theme.of(context).colorScheme.surface,
                 ),
                 child: const Text('Start Listening'),
               ),

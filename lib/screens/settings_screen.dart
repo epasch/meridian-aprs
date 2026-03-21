@@ -1,10 +1,14 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/transport/tnc_config.dart';
 import '../core/transport/tnc_preset.dart';
 import '../services/tnc_service.dart';
-import '../ui/theme/theme_provider.dart';
+import '../theme/meridian_colors.dart';
+import '../theme/theme_controller.dart';
 
 /// Application settings screen.
 ///
@@ -19,11 +23,12 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView.separated(
-        itemCount: 9,
+        itemCount: 10,
         separatorBuilder: (context, index) =>
             const Divider(indent: 16, endIndent: 16),
         itemBuilder: (context, index) => [
           const _AppearanceSection(),
+          const _AppColorSection(),
           const _MyStationSection(),
           const _BeaconingSection(),
           const _ConnectionSection(),
@@ -73,7 +78,7 @@ class _AppearanceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
+    final controller = context.watch<ThemeController>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,12 +105,107 @@ class _AppearanceSection extends StatelessWidget {
                 label: Text('Auto'),
               ),
             ],
-            selected: {themeProvider.themeMode},
+            selected: {controller.themeMode},
             onSelectionChanged: (modes) {
               if (modes.isNotEmpty) {
-                context.read<ThemeProvider>().setThemeMode(modes.first);
+                context.read<ThemeController>().setThemeMode(modes.first);
               }
             },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// App Color (Android only)
+// ---------------------------------------------------------------------------
+
+/// Seed color picker shown only on Android.
+///
+/// On Android 12+ the selected color is used only as a fallback when dynamic
+/// color is unavailable. On Android 11 and below it is always active.
+/// Hidden on iOS and desktop — the seed has no effect there.
+class _AppColorSection extends StatelessWidget {
+  const _AppColorSection();
+
+  static const _swatches = [
+    (label: 'Meridian Blue', color: MeridianColors.primary),
+    (label: 'Slate', color: Color(0xFF64748B)),
+    (label: 'Violet', color: Color(0xFF7C3AED)),
+    (label: 'Rose', color: Color(0xFFE11D48)),
+    (label: 'Amber', color: Color(0xFFD97706)),
+    (label: 'Teal', color: Color(0xFF0D9488)),
+    (label: 'Emerald', color: Color(0xFF059669)),
+    (label: 'Sky', color: Color(0xFF0284C7)),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    // Always included in the list to keep itemCount stable; invisible elsewhere.
+    if (kIsWeb || !Platform.isAndroid) return const SizedBox.shrink();
+
+    final controller = context.watch<ThemeController>();
+    final selected = controller.seedColor;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('App Color'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Used when dynamic color is unavailable (Android 11 and below).',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: _swatches.map((swatch) {
+                  final isSelected =
+                      selected.toARGB32() == swatch.color.toARGB32();
+                  return Semantics(
+                    label: swatch.label,
+                    selected: isSelected,
+                    button: true,
+                    child: InkWell(
+                      onTap: () => context.read<ThemeController>().setSeedColor(
+                        swatch.color,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: swatch.color,
+                          shape: BoxShape.circle,
+                          border: isSelected
+                              ? Border.all(
+                                  color: Theme.of(context).colorScheme.outline,
+                                  width: 2.5,
+                                )
+                              : null,
+                        ),
+                        child: isSelected
+                            ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 20,
+                              )
+                            : null,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
           ),
         ),
       ],

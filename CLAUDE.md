@@ -121,13 +121,17 @@ Keep these files current as the project evolves:
 
 ## UI Components Inventory
 
-### Theme System (`lib/ui/theme/`)
+### Theme System (`lib/theme/`) — Three-Tier Platform Architecture
+
+Android tier implemented; iOS and desktop stubs in place for future PRs.
 
 | File | Class | Description |
 |---|---|---|
-| `app_theme.dart` | `AppColors` | Static color token constants (primary, accent, warning, danger, surface, text) |
-| `app_theme.dart` | `AppTheme` | `lightTheme` and `darkTheme` ThemeData builders |
-| `theme_provider.dart` | `ThemeProvider` | ChangeNotifier for ThemeMode; persists to SharedPreferences |
+| `meridian_colors.dart` | `MeridianColors` | Brand color constants: `primary`, `primaryDark`, `signal`, `warning`, `danger` |
+| `theme_controller.dart` | `ThemeController` | ChangeNotifier for `themeMode` + `seedColor`; persists both to SharedPreferences |
+| `android_theme.dart` | `buildAndroidTheme()` | Builds Android ThemeData pair; uses `DynamicColorBuilder` schemes or seed fallback; applies M3 Expressive via `m3e_design` |
+| `ios_theme.dart` | — | Stub — Cupertino tier, implement in `feat/ios-theme` |
+| `desktop_theme.dart` | — | Stub — M3 static brand tier, implement in `feat/desktop-theme` |
 
 ### Layout System (`lib/ui/layout/`)
 

@@ -11,8 +11,8 @@ import '../core/transport/aprs_transport.dart';
 import '../services/station_service.dart';
 import '../services/tnc_service.dart';
 import '../ui/layout/responsive_layout.dart';
-import '../ui/theme/app_theme.dart';
-import '../ui/theme/theme_provider.dart';
+import '../theme/meridian_colors.dart';
+import '../theme/theme_controller.dart';
 import '../ui/widgets/aprs_symbol_widget.dart';
 import '../ui/widgets/station_info_sheet.dart';
 import 'settings_screen.dart';
@@ -21,7 +21,7 @@ import 'settings_screen.dart';
 /// adaptive layout.
 ///
 /// Map tile URL is theme-aware: light mode uses OSM standard tiles, dark mode
-/// uses CartoDB dark tiles. The theme is read from [ThemeProvider] and the
+/// uses CartoDB dark tiles. The theme is read from [ThemeController] and the
 /// system brightness is used to resolve [ThemeMode.system].
 class MapScreen extends StatefulWidget {
   const MapScreen({
@@ -142,12 +142,12 @@ class _MapScreenState extends State<MapScreen> {
       case 'P':
       case 'f':
       case 'd':
-        return AppColors.danger;
+        return MeridianColors.danger;
       // Weather
       case '_':
-        return AppColors.accent;
+        return MeridianColors.signal;
       default:
-        return AppColors.primaryLight;
+        return MeridianColors.primary;
     }
   }
 
@@ -174,8 +174,8 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Resolve the tile URL based on the current theme mode and system brightness.
   String _tileUrl(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final brightness = switch (themeProvider.themeMode) {
+    final themeController = context.watch<ThemeController>();
+    final brightness = switch (themeController.themeMode) {
       ThemeMode.light => Brightness.light,
       ThemeMode.dark => Brightness.dark,
       ThemeMode.system => MediaQuery.of(context).platformBrightness,

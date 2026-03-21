@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/transport/aprs_transport.dart' show ConnectionStatus;
-import '../theme/app_theme.dart';
+import '../../theme/meridian_colors.dart';
 
 /// A compact status indicator pill for the top app bar.
 ///
@@ -76,13 +76,13 @@ class _MeridianStatusPillState extends State<MeridianStatusPill>
   Color _dotColor() {
     switch (widget.status) {
       case ConnectionStatus.connected:
-        return AppColors.accent;
+        return MeridianColors.signal;
       case ConnectionStatus.connecting:
-        return AppColors.warning;
+        return MeridianColors.warning;
       case ConnectionStatus.disconnected:
-        return AppColors.danger;
+        return MeridianColors.danger;
       case ConnectionStatus.error:
-        return AppColors.danger;
+        return MeridianColors.danger;
     }
   }
 

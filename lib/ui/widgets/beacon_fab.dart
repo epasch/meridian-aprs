@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../../theme/meridian_colors.dart';
 
 /// A large FAB that represents the beacon transmit action.
 ///
@@ -64,12 +64,13 @@ class _BeaconFABState extends State<BeaconFAB>
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final bgColor = widget.isBeaconing
-        ? AppColors.danger
-        : Theme.of(context).colorScheme.primary;
+        ? MeridianColors.danger
+        : colorScheme.primary;
     final fgColor = widget.isBeaconing
-        ? AppColors.surfaceLight
-        : Theme.of(context).colorScheme.onPrimary;
+        ? colorScheme.surface
+        : colorScheme.onPrimary;
 
     return ScaleTransition(
       scale: widget.isBeaconing

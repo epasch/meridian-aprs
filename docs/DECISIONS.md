@@ -171,3 +171,67 @@ This file logs significant architectural decisions made during the development o
 **Decision:** `flutter_libserialport` (backed by `libserialport`) is chosen for its maturity, Linux/macOS/Windows support, and no FFI boilerplate. Version `^0.6.0` used (resolves to 0.6.0 / libserialport 0.3.0+1).
 
 **Consequences:** Adds a desktop-only native dependency. Web and mobile are guarded by `dart.library.io` conditional export and the plugin's own platform manifest.
+
+# ADR: Three-Tier Platform Theme Architecture
+
+**Date:** 2026-03-21  
+**Status:** Accepted  
+**Deciders:** Eric (project lead)
+
+---
+
+## Context
+
+Meridian targets Android, iOS, and desktop (Windows/macOS/Linux) from a single Flutter codebase. Each platform has a distinct native design language with different user expectations:
+
+- Android users on modern Pixels expect Material You dynamic color (wallpaper-adaptive theming) and Material 3 Expressive styling.
+- iOS users expect Cupertino design language — navigation transitions, system fonts, native chrome behavior.
+- Desktop users have no strong per-OS UI expectation for a utility app; consistency across Windows/macOS/Linux is more valuable than per-OS native chrome.
+
+The original UI Foundation theme system used a single `ThemeData` with static Meridian brand tokens — functional, but not platform-native on Android or iOS.
+
+---
+
+## Decision
+
+Adopt a **three-tier platform theme architecture**:
+
+| Tier | Platform | System |
+|---|---|---|
+| 1 | Android | Material 3 Expressive + Dynamic Color (`dynamic_color`, `m3e_design`) |
+| 2 | iOS | Standard Cupertino (designed for clean Liquid Glass upgrade) |
+| 3 | Desktop | Material 3 static brand theme (Meridian Blue seed, M3 only) |
+
+A single `ThemeController` manages `themeMode` and `seedColor` as shared state. Platform detection (`Platform.isIOS`) occurs only at the app root to select `CupertinoApp` vs `MaterialApp`. All widgets below the root receive theme context normally.
+
+---
+
+## Consequences
+
+**Android:** Users get full Material You integration — the app adapts to wallpaper colors on Android 12+ and gracefully falls back to a user-chosen seed color on older devices. M3 Expressive shapes and motion are applied via `m3e_design` ThemeExtension.
+
+**iOS:** Users get a proper Cupertino experience today. The iOS theme is isolated in `lib/theme/ios_theme.dart` so that the upgrade to Liquid Glass (iOS 26+) is a contained, single-file change when Flutter's Cupertino library adds official support.
+
+**Desktop:** A consistent, modern Material 3 appearance across all desktop platforms. No per-OS native chrome for now; this may be revisited post-v1.0 for macOS.
+
+**Settings:** Android gains an App Color (seed) picker in Settings → Appearance, hidden on iOS and desktop. All platforms get a Theme mode toggle (System / Light / Dark), defaulting to System.
+
+---
+
+## Alternatives Considered
+
+**Single unified Material 3 theme everywhere** — rejected because iOS users get a substandard experience (Material components do not feel native on iOS).
+
+**Full per-platform native chrome (macOS native, Windows Fluent, etc.)** — rejected as disproportionate complexity for v1.0. Desktop users of a utility APRS app have lower native-feel expectations than mobile users.
+
+**Static seed color on Android (no dynamic color)** — rejected because dynamic color is a flagship Android feature and core to the "modern ham" positioning of Meridian.
+
+---
+
+## Packages Added
+
+| Package | Tier | Purpose |
+|---|---|---|
+| `dynamic_color` | Android | Wallpaper-derived ColorScheme on Android 12+ |
+| `m3e_design` | Android | M3 Expressive ThemeExtension tokens |
+| `flutter_m3shapes` | Android | M3 Expressive shape library |
