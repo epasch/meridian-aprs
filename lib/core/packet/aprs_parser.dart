@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import '../ax25/ax25_parser.dart';
 import 'aprs_packet.dart';
 
 /// Full APRS packet parser.
@@ -79,14 +81,24 @@ class AprsParser {
   /// Stub implementation — returns [UnknownPacket] until AX.25 framing support
   /// is added in a future milestone.
   AprsPacket parseFrame(Uint8List frameBytes) {
-    return UnknownPacket(
-      rawLine: '',
-      source: '',
-      destination: '',
-      path: const [],
-      receivedAt: DateTime.now().toUtc(),
-      reason: 'AX.25 frame parsing not yet implemented',
-    );
+    final result = const Ax25Parser().parseFrame(frameBytes);
+    if (result is Ax25Err) {
+      return UnknownPacket(
+        rawLine: '',
+        source: '',
+        destination: '',
+        path: const [],
+        receivedAt: DateTime.now().toUtc(),
+        reason: 'AX.25 decode failed: ${result.reason}',
+      );
+    }
+    final frame = (result as Ax25Ok).frame;
+    final infoStr = utf8.decode(frame.info, allowMalformed: true);
+    final pathStr =
+        frame.pathString.isEmpty ? '' : ',${frame.pathString}';
+    final reconstructed =
+        '${frame.source}>${frame.destination}$pathStr:$infoStr';
+    return parse(reconstructed);
   }
 
   // ---------------------------------------------------------------------------

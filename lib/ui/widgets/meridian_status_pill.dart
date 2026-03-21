@@ -70,6 +70,7 @@ class _MeridianStatusPillState extends State<MeridianStatusPill>
     ConnectionStatus.connected => 'Connected',
     ConnectionStatus.connecting => 'Connecting',
     ConnectionStatus.disconnected => 'Disconnected',
+    ConnectionStatus.error => 'Error',
   };
 
   Color _dotColor() {
@@ -79,6 +80,8 @@ class _MeridianStatusPillState extends State<MeridianStatusPill>
       case ConnectionStatus.connecting:
         return AppColors.warning;
       case ConnectionStatus.disconnected:
+        return AppColors.danger;
+      case ConnectionStatus.error:
         return AppColors.danger;
     }
   }
