@@ -44,10 +44,10 @@ Pure Dart. No platform imports, no FFI. Responsible for:
 Platform-aware. Responsible for moving bytes between the app and the outside world. Each transport implements a common abstract interface so the Service Layer is transport-agnostic.
 
 Transports:
-- **APRS-IS TCP** — direct TCP socket connection to `rotate.aprs2.net:14580`
+- **`AprsIsTransport`** — direct TCP socket connection to `rotate.aprs2.net:14580`
 - **APRS-IS WebSocket** — WebSocket proxy for web platform (browser cannot open raw TCP)
-- **KISS/USB Serial** — via `flutter_libserialport`; desktop platforms only
-- **KISS/BLE** — via `flutter_blue_plus`; mobile platforms (iOS/Android)
+- **`SerialKissTransport`** — KISS over USB serial via `flutter_libserialport`; desktop platforms only (Linux, macOS, Windows)
+- **KISS/BLE** — via `flutter_blue_plus`; mobile platforms (iOS/Android); v0.4
 
 ### Platform Channels
 
@@ -166,6 +166,40 @@ All colors are defined as static constants on `AppColors` in `lib/ui/theme/app_t
 `ThemeProvider` (`lib/ui/theme/theme_provider.dart`) extends `ChangeNotifier` and persists the user's `ThemeMode` choice to `SharedPreferences` under key `'theme_mode'`. Default is `ThemeMode.system`. It is provided at the top of the widget tree via `provider`.
 
 The map tile URL is theme-aware: light mode uses OSM standard tiles; dark mode uses CartoDB dark tiles (subdomain rotation via `{s}`).
+
+---
+
+## TNC Transport (v0.3+)
+
+### SerialKissTransport
+
+Implements `AprsTransport` (the same interface as `AprsIsTransport`). Uses `flutter_libserialport` for serial I/O on desktop (Linux, macOS, Windows).
+
+Internal pipeline:
+
+```
+serial bytes → KissFramer.addBytes → Ax25Parser.parseFrame → AprsParser.parseFrame
+  → APRS-IS format line (SOURCE>DEST,PATH:INFO) → lines stream
+```
+
+Platform guard: conditional export (`dart.library.io`) with `UnsupportedError` stub for web/mobile. `StationService` is unchanged — it consumes the same `Stream<String> lines` it always has.
+
+### KissFramer
+
+Pure Dart KISS protocol framer (`lib/core/transport/kiss_framer.dart`). Stateful byte accumulator — feed raw serial bytes via `addBytes`, receive decoded AX.25 payloads on `frames` stream. Static `encode` wraps a payload for transmission. FEND/FESC/TFEND/TFESC constants follow the KISS TNC spec.
+
+### Ax25Parser
+
+Pure Dart AX.25 UI frame byte decoder (`lib/core/ax25/ax25_parser.dart`). Decodes the address block (destination, source, digipeaters), control byte, PID byte, and information field. Returns sealed `Ax25ParseResult` (`Ax25Ok` | `Ax25Err`). Never throws.
+
+### TncPreset / TncConfig
+
+- `TncPreset` (`lib/core/transport/tnc_preset.dart`): immutable preset for known TNC hardware (Mobilinkd TNC4 + Custom sentinel). `TncPreset.all` is the full list used by UI dropdowns and is easily extended for v0.4 BLE presets.
+- `TncConfig` (`lib/core/transport/tnc_config.dart`): runtime serial + KISS configuration. `fromPreset` factory, `toPrefsMap`/`fromPrefsMap` for SharedPreferences persistence.
+
+### TncService
+
+`ChangeNotifier` service (`lib/services/tnc_service.dart`) that owns the `SerialKissTransport` lifecycle. Bridges decoded APRS lines into `StationService` via `StationService.ingestLine`. Persists `TncConfig` across restarts. Exposes `connectionState: Stream<ConnectionStatus>`, `currentStatus`, `lastErrorMessage`, and `availablePorts()`.
 
 ---
 

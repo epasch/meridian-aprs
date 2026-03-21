@@ -123,3 +123,51 @@ This file logs significant architectural decisions made during the development o
 **Decision:** Use the `provider` package (specifically `ChangeNotifierProvider`) to expose `ThemeProvider` to the widget tree.
 
 **Rationale:** `ThemeProvider` is the only piece of global app-level reactive state at this stage (theme mode). `provider` is already part of the Flutter recommended toolkit, has minimal API surface, and integrates cleanly with `ChangeNotifier`. The alternative — Riverpod — adds complexity not yet warranted by a single global notifier. If the app's state management needs grow significantly in v0.5+ (beaconing state, message drafts, connection state), migrating from `provider` to Riverpod is a contained refactor. Choosing `provider` now keeps dependencies lean and the architecture legible.
+
+---
+
+## ADR-013: SerialKissTransport Implements AprsTransport
+
+**Status:** Accepted
+
+**Context:** v0.3 adds USB serial TNC support. The existing `AprsTransport` abstract class (`lib/core/transport/aprs_transport.dart`) defines `Stream<String> get lines` — an APRS-IS text-line–oriented interface. An alternative was to introduce a new `TransportInterface` with `Stream<Uint8List>` for raw bytes, which would have required changes to `StationService` and the packet log.
+
+**Decision:** `SerialKissTransport` implements `AprsTransport` directly. Internally it decodes KISS frames → AX.25 bytes → reconstructs an APRS-IS format line (`SOURCE>DEST,PATH:INFO`) and emits that on `lines`. `StationService` is unchanged.
+
+**Consequences:** Minimal blast radius. No multi-transport refactor needed. The APRS line reconstruction is ephemeral (not stored). Failed AX.25 decodes emit an empty `rawLine` which `StationService._handleLine` silently skips.
+
+---
+
+## ADR-014: TncService Bridges to StationService via ingestLine
+
+**Status:** Accepted
+
+**Context:** Both APRS-IS and TNC should feed packets into the same station map and packet log. Options: (A) a public `ingestLine` method on `StationService`, or (B) refactor `StationService` to hold multiple transports.
+
+**Decision:** Option A — `StationService.ingestLine(String raw)` is a thin public wrapper for `_handleLine`. `TncService` subscribes to `SerialKissTransport.lines` and calls `stationService.ingestLine(line)`.
+
+**Consequences:** `StationService` API surface grows by one method. Multi-transport refactor is deferred until v0.5 beaconing requires it (when a transmit path is needed).
+
+---
+
+## ADR-015: TNC Preset System
+
+**Status:** Accepted
+
+**Context:** Serial port parameters (baud rate, parity, flow control) differ between TNC models. Free-form configuration is error-prone for common hardware.
+
+**Decision:** `TncPreset` provides bundled presets for known hardware. Selecting any preset other than `custom` locks the serial parameter fields in the UI to prevent misconfiguration. The preset list (`TncPreset.all`) is a compile-time constant easily extended for v0.4 BLE presets.
+
+**Consequences:** Adding a new TNC model requires adding a `const TncPreset` to `tnc_preset.dart`. Custom parameters remain available via the `custom` preset.
+
+---
+
+## ADR-016: flutter_libserialport for USB Serial
+
+**Status:** Accepted
+
+**Context:** USB serial access on desktop requires a platform plugin. Options: `flutter_libserialport`, `flutter_serial_port`, or raw platform channels.
+
+**Decision:** `flutter_libserialport` (backed by `libserialport`) is chosen for its maturity, Linux/macOS/Windows support, and no FFI boilerplate. Version `^0.6.0` used (resolves to 0.6.0 / libserialport 0.3.0+1).
+
+**Consequences:** Adds a desktop-only native dependency. Web and mobile are guarded by `dart.library.io` conditional export and the plugin's own platform manifest.

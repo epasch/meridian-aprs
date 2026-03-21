@@ -1,7 +1,7 @@
 import 'dart:async';
 
 /// The lifecycle state of a transport connection.
-enum ConnectionStatus { disconnected, connecting, connected }
+enum ConnectionStatus { disconnected, connecting, connected, error }
 
 abstract class AprsTransport {
   /// Raw APRS-IS lines, newline stripped. Comment lines included.

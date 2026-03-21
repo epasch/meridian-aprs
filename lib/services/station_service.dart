@@ -64,16 +64,25 @@ class StationService {
   // ---------------------------------------------------------------------------
 
   Future<void> start() async {
-    try {
-      await _transport.connect();
-    } catch (e) {
-      debugPrint('APRS-IS connection failed: $e');
-    }
+    // Wire up the line stream once — persists across reconnects.
     _transport.lines.listen(
       _handleLine,
       onError: (e) => debugPrint('Transport error: $e'),
       onDone: () => debugPrint('Transport connection closed'),
     );
+    await connectAprsIs();
+  }
+
+  Future<void> connectAprsIs() async {
+    try {
+      await _transport.connect();
+    } catch (e) {
+      debugPrint('APRS-IS connection failed: $e');
+    }
+  }
+
+  Future<void> disconnectAprsIs() async {
+    await _transport.disconnect();
   }
 
   void updateFilter(double lat, double lon, {int radiusKm = 150}) {
@@ -81,6 +90,11 @@ class StationService {
         '#filter r/${lat.toStringAsFixed(2)}/${lon.toStringAsFixed(2)}/$radiusKm\r\n';
     _transport.sendLine(line);
   }
+
+  /// Ingest a pre-formatted APRS line from an external transport source
+  /// (e.g. a TNC). Delegates to [_handleLine].
+  void ingestLine(String raw, {PacketSource source = PacketSource.tnc}) =>
+      _handleLine(raw, source: source);
 
   Future<void> stop() async {
     await _transport.disconnect();
@@ -92,13 +106,13 @@ class StationService {
   // Internal
   // ---------------------------------------------------------------------------
 
-  void _handleLine(String raw) {
+  void _handleLine(String raw, {PacketSource source = PacketSource.aprsIs}) {
     debugPrint(raw);
 
     // Skip server comment lines — not packets.
     if (raw.isEmpty || raw.startsWith('#')) return;
 
-    final packet = _parser.parse(raw);
+    final packet = _parser.parse(raw, transportSource: source);
 
     // Add to rolling buffer.
     _recentPackets.insert(0, packet);

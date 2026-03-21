@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:meridian_aprs/ui/theme/theme_provider.dart';
 import 'package:meridian_aprs/screens/map_screen.dart';
 import 'package:meridian_aprs/services/station_service.dart';
+import 'package:meridian_aprs/services/tnc_service.dart';
 
 import 'helpers/fake_transport.dart';
 
@@ -15,11 +16,17 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final themeProvider = await ThemeProvider.create();
     final service = StationService(FakeTransport());
+    final tncService = TncService(service);
 
     await tester.pumpWidget(
-      ChangeNotifierProvider<ThemeProvider>.value(
-        value: themeProvider,
-        child: MaterialApp(home: MapScreen(service: service)),
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
+          ChangeNotifierProvider<TncService>.value(value: tncService),
+        ],
+        child: MaterialApp(
+          home: MapScreen(service: service, tncService: tncService),
+        ),
       ),
     );
 
