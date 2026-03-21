@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
+import '../../core/transport/aprs_transport.dart' show ConnectionStatus;
+import '../../screens/packet_log_screen.dart';
+import '../../screens/station_list_screen.dart';
 import '../../services/station_service.dart';
 import '../widgets/meridian_bottom_sheet.dart';
 import '../widgets/meridian_status_pill.dart';
@@ -16,6 +20,9 @@ class DesktopScaffold extends StatefulWidget {
     required this.markers,
     required this.tileUrl,
     required this.onNavigateToSettings,
+    this.connectionStatus = ConnectionStatus.disconnected,
+    this.initialCenter = const LatLng(39.0, -77.0),
+    this.initialZoom = 9.0,
   });
 
   final StationService service;
@@ -23,6 +30,9 @@ class DesktopScaffold extends StatefulWidget {
   final List<Marker> markers;
   final String tileUrl;
   final VoidCallback onNavigateToSettings;
+  final ConnectionStatus connectionStatus;
+  final LatLng initialCenter;
+  final double initialZoom;
 
   @override
   State<DesktopScaffold> createState() => _DesktopScaffoldState();
@@ -30,6 +40,8 @@ class DesktopScaffold extends StatefulWidget {
 
 class _DesktopScaffoldState extends State<DesktopScaffold> {
   int _selectedIndex = 0;
+  bool _navRailExpanded = true;
+  bool _panelVisible = true;
 
   void _showConnectionSheet(BuildContext context) {
     showModalBottomSheet(
@@ -50,12 +62,24 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          tooltip: _navRailExpanded ? 'Collapse sidebar' : 'Expand sidebar',
+          onPressed: () => setState(() => _navRailExpanded = !_navRailExpanded),
+        ),
         title: const Text('Meridian'),
         actions: [
           MeridianStatusPill(
-            status: ConnectionStatus.disconnected,
+            status: widget.connectionStatus,
             label: 'APRS-IS',
             onTap: () => _showConnectionSheet(context),
+          ),
+          IconButton(
+            icon: Icon(
+              _panelVisible ? Icons.view_sidebar : Icons.view_sidebar_outlined,
+            ),
+            tooltip: _panelVisible ? 'Hide packet log' : 'Show packet log',
+            onPressed: () => setState(() => _panelVisible = !_panelVisible),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -68,11 +92,19 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
       body: Row(
         children: [
           NavigationRail(
-            extended: true,
+            extended: _navRailExpanded,
             minExtendedWidth: 240,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 4) {
+              if (i == 1) {
+                // Stations — push full-screen station list.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => StationListScreen(service: widget.service),
+                  ),
+                );
+              } else if (i == 4) {
                 widget.onNavigateToSettings();
               } else {
                 setState(() => _selectedIndex = i);
@@ -112,39 +144,52 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
               mapController: widget.mapController,
               markers: widget.markers,
               tileUrl: widget.tileUrl,
+              connectionStatus: widget.connectionStatus,
+              initialCenter: widget.initialCenter,
+              initialZoom: widget.initialZoom,
             ),
           ),
-          const VerticalDivider(width: 1),
-          // Side panel — packet log / station list panel (future).
-          const _SidePanel(),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: _panelVisible
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const VerticalDivider(width: 1),
+                      _PacketLogPanel(service: widget.service),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
   }
 }
 
-class _SidePanel extends StatelessWidget {
-  const _SidePanel();
+class _PacketLogPanel extends StatelessWidget {
+  const _PacketLogPanel({required this.service});
+
+  final StationService service;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return SizedBox(
       width: 320,
-      child: Container(
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Text(
-              'Packet Log / Stations panel coming soon',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              'Packet Log',
+              style: Theme.of(context).textTheme.titleSmall,
             ),
           ),
-        ),
+          const Divider(height: 1),
+          Expanded(child: PacketLogBody(service: service)),
+        ],
       ),
     );
   }

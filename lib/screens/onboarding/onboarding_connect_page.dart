@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../ui/theme/app_theme.dart';
@@ -11,21 +10,17 @@ import '../../ui/theme/app_theme.dart';
 class OnboardingConnectPage extends StatefulWidget {
   const OnboardingConnectPage({super.key, required this.onStartListening});
 
-  final VoidCallback onStartListening;
+  /// Called when the user taps "Start Listening".
+  /// Provides the selected connection method index (0=APRS-IS, 1=BLE, 2=USB).
+  final void Function(int connectionMethod) onStartListening;
 
   @override
   State<OnboardingConnectPage> createState() => _OnboardingConnectPageState();
 }
 
 class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
-  int _selectedOption = 0; // 0=APRS-IS, 1=BLE, 2=USB
-
-  bool get _isMobile {
-    if (kIsWeb) return false;
-    // defaultTargetPlatform is Android or iOS on mobile.
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-  }
+  int _selectedOption =
+      0; // 0=APRS-IS only — BLE/USB coming in future milestones
 
   @override
   Widget build(BuildContext context) {
@@ -66,9 +61,9 @@ class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
               selectedIndex: _selectedOption,
               icon: Icons.bluetooth,
               title: 'BLE TNC',
-              subtitle: 'Connect a Bluetooth TNC. Mobile-friendly.',
-              dimmed: false,
-              onTap: () => setState(() => _selectedOption = 1),
+              subtitle: 'Coming in v0.4',
+              dimmed: true,
+              onTap: null,
             ),
             const SizedBox(height: 12),
             _OptionCard(
@@ -76,23 +71,19 @@ class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
               selectedIndex: _selectedOption,
               icon: Icons.usb,
               title: 'USB TNC',
-              subtitle: _isMobile
-                  ? 'Connect via USB serial. Desktop only.'
-                  : 'Connect via USB serial. Desktop only.',
-              dimmed: _isMobile,
-              onTap: _isMobile
-                  ? null
-                  : () => setState(() => _selectedOption = 2),
+              subtitle: 'Coming in v0.3',
+              dimmed: true,
+              onTap: null,
             ),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: widget.onStartListening,
+                onPressed: () => widget.onStartListening(_selectedOption),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: AppColors.accent,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.surfaceLight,
                 ),
                 child: const Text('Start Listening'),
               ),

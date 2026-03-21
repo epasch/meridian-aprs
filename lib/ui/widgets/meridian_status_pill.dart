@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/transport/aprs_transport.dart' show ConnectionStatus;
 import '../theme/app_theme.dart';
-
-/// The connection state shown in the top app bar.
-enum ConnectionStatus { connected, connecting, disconnected }
 
 /// A compact status indicator pill for the top app bar.
 ///
@@ -68,6 +66,12 @@ class _MeridianStatusPillState extends State<MeridianStatusPill>
     super.dispose();
   }
 
+  static String _stateLabel(ConnectionStatus s) => switch (s) {
+    ConnectionStatus.connected => 'Connected',
+    ConnectionStatus.connecting => 'Connecting',
+    ConnectionStatus.disconnected => 'Disconnected',
+  };
+
   Color _dotColor() {
     switch (widget.status) {
       case ConnectionStatus.connected:
@@ -92,7 +96,8 @@ class _MeridianStatusPillState extends State<MeridianStatusPill>
     );
 
     return Semantics(
-      label: 'Connection status: ${widget.label}',
+      label:
+          'Connection status: ${widget.label} — ${_stateLabel(widget.status)}',
       button: widget.onTap != null,
       child: InkWell(
         onTap: widget.onTap,

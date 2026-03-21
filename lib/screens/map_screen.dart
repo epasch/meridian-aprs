@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/packet/station.dart';
-import '../core/transport/aprs_is_transport.dart';
+import '../core/transport/aprs_transport.dart';
 import '../services/station_service.dart';
 import '../ui/layout/responsive_layout.dart';
+import '../ui/theme/app_theme.dart';
 import '../ui/theme/theme_provider.dart';
 import '../ui/widgets/aprs_symbol_widget.dart';
 import '../ui/widgets/station_info_sheet.dart';
@@ -21,7 +23,25 @@ import 'settings_screen.dart';
 /// uses CartoDB dark tiles. The theme is read from [ThemeProvider] and the
 /// system brightness is used to resolve [ThemeMode.system].
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({
+    super.key,
+    required this.service,
+    this.callsign = 'NOCALL',
+    this.ssid = 0,
+    this.initialLat = 39.0,
+    this.initialLon = -77.0,
+    this.initialZoom = 9.0,
+  });
+
+  final StationService service;
+  final String callsign;
+
+  /// SSID suffix (0 = no suffix, 1–15 appended as `-N`).
+  final int ssid;
+
+  final double initialLat;
+  final double initialLon;
+  final double initialZoom;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -33,6 +53,7 @@ class _MapScreenState extends State<MapScreen> {
   List<Marker> _markers = [];
   Timer? _filterDebounce;
   Timer? _markerDebounce;
+  late ConnectionStatus _connectionStatus;
 
   // Tile URL constants.
   static const _lightTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -42,13 +63,25 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    final transport = AprsIsTransport(
-      loginLine: 'user NOCALL pass -1 vers meridian-aprs 0.1\r\n',
-      filterLine: '#filter r/39.0/-77.0/100\r\n',
-    );
-    _service = StationService(transport);
+    _service = widget.service;
+    _connectionStatus = _service.currentConnectionStatus;
     _service.stationUpdates.listen(_onStationsUpdated);
-    _service.start();
+    _service.connectionState.listen((status) {
+      if (!mounted) return;
+      final wasConnecting = _connectionStatus == ConnectionStatus.connecting;
+      setState(() => _connectionStatus = status);
+      if (wasConnecting && status == ConnectionStatus.disconnected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not connect to APRS-IS. Check your network.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    });
+    _service.start().catchError((Object e) {
+      debugPrint('APRS-IS connection failed: $e');
+    });
     _mapController.mapEventStream
         .where((e) => e is MapEventMoveEnd)
         .cast<MapEventMoveEnd>()
@@ -67,8 +100,14 @@ class _MapScreenState extends State<MapScreen> {
     _filterDebounce?.cancel();
     _filterDebounce = Timer(const Duration(milliseconds: 800), () {
       final center = event.camera.center;
+      final zoom = event.camera.zoom;
       debugPrint('Filter update: ${center.latitude}, ${center.longitude}');
       _service.updateFilter(center.latitude, center.longitude);
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setDouble('map_last_lat', center.latitude);
+        prefs.setDouble('map_last_lon', center.longitude);
+        prefs.setDouble('map_last_zoom', zoom);
+      });
     });
   }
 
@@ -77,7 +116,10 @@ class _MapScreenState extends State<MapScreen> {
     _markerDebounce = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
       setState(() {
-        _markers = _service.currentStations.values.map(_buildMarker).toList();
+        // Sort ascending by lastHeard so newest stations render on top.
+        final sorted = _service.currentStations.values.toList()
+          ..sort((a, b) => a.lastHeard.compareTo(b.lastHeard));
+        _markers = sorted.map(_buildMarker).toList();
       });
     });
   }
@@ -90,12 +132,12 @@ class _MapScreenState extends State<MapScreen> {
       case 'P':
       case 'f':
       case 'd':
-        return Colors.red;
+        return AppColors.danger;
       // Weather
       case '_':
-        return Colors.blue;
+        return AppColors.accent;
       default:
-        return Colors.blueGrey;
+        return AppColors.primaryLight;
     }
   }
 
@@ -146,6 +188,9 @@ class _MapScreenState extends State<MapScreen> {
       markers: _markers,
       tileUrl: _tileUrl(context),
       onNavigateToSettings: _navigateToSettings,
+      connectionStatus: _connectionStatus,
+      initialCenter: LatLng(widget.initialLat, widget.initialLon),
+      initialZoom: widget.initialZoom,
     );
   }
 }

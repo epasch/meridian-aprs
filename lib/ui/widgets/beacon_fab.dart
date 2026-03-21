@@ -66,9 +66,9 @@ class _BeaconFABState extends State<BeaconFAB>
   Widget build(BuildContext context) {
     final bgColor = widget.isBeaconing
         ? AppColors.danger
-        : AppColors.primaryLight;
+        : Theme.of(context).colorScheme.primary;
     final fgColor = widget.isBeaconing
-        ? Colors.white
+        ? AppColors.surfaceLight
         : Theme.of(context).colorScheme.onPrimary;
 
     return ScaleTransition(

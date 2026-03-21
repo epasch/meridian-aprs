@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
+import '../../core/transport/aprs_transport.dart' show ConnectionStatus;
+import '../../screens/packet_log_screen.dart';
+import '../../screens/station_list_screen.dart';
 import '../../services/station_service.dart';
 import '../widgets/meridian_bottom_sheet.dart';
 import '../widgets/meridian_status_pill.dart';
@@ -16,6 +20,9 @@ class TabletScaffold extends StatefulWidget {
     required this.markers,
     required this.tileUrl,
     required this.onNavigateToSettings,
+    this.connectionStatus = ConnectionStatus.disconnected,
+    this.initialCenter = const LatLng(39.0, -77.0),
+    this.initialZoom = 9.0,
   });
 
   final StationService service;
@@ -23,6 +30,9 @@ class TabletScaffold extends StatefulWidget {
   final List<Marker> markers;
   final String tileUrl;
   final VoidCallback onNavigateToSettings;
+  final ConnectionStatus connectionStatus;
+  final LatLng initialCenter;
+  final double initialZoom;
 
   @override
   State<TabletScaffold> createState() => _TabletScaffoldState();
@@ -53,7 +63,7 @@ class _TabletScaffoldState extends State<TabletScaffold> {
         title: const Text('Meridian'),
         actions: [
           MeridianStatusPill(
-            status: ConnectionStatus.disconnected,
+            status: widget.connectionStatus,
             label: 'APRS-IS',
             onTap: () => _showConnectionSheet(context),
           ),
@@ -71,7 +81,23 @@ class _TabletScaffoldState extends State<TabletScaffold> {
             extended: false,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 4) {
+              if (i == 1) {
+                // Log — push full-screen packet log.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => PacketLogScreen(service: widget.service),
+                  ),
+                );
+              } else if (i == 2) {
+                // Stations — push full-screen station list.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => StationListScreen(service: widget.service),
+                  ),
+                );
+              } else if (i == 5) {
                 widget.onNavigateToSettings();
               } else {
                 setState(() => _selectedIndex = i);
@@ -82,6 +108,11 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                 icon: Icon(Icons.map_outlined),
                 selectedIcon: Icon(Icons.map),
                 label: Text('Map'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.list_alt_outlined),
+                selectedIcon: Icon(Icons.list_alt),
+                label: Text('Log'),
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.people_outline),
@@ -114,10 +145,21 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                     mapController: widget.mapController,
                     markers: widget.markers,
                     tileUrl: widget.tileUrl,
+                    connectionStatus: widget.connectionStatus,
+                    initialCenter: widget.initialCenter,
+                    initialZoom: widget.initialZoom,
                   ),
                 ),
-                // Collapsed bottom panel placeholder.
-                _BottomPanel(service: widget.service),
+                // Collapsed bottom panel — tapping opens the full packet log.
+                _BottomPanel(
+                  service: widget.service,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => PacketLogScreen(service: widget.service),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -128,32 +170,42 @@ class _TabletScaffoldState extends State<TabletScaffold> {
 }
 
 class _BottomPanel extends StatelessWidget {
-  const _BottomPanel({required this.service});
+  const _BottomPanel({required this.service, required this.onTap});
 
   final StationService service;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      height: 48,
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Icon(
-            Icons.people,
-            size: 16,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '${service.currentStations.length} stations nearby',
-            style: theme.textTheme.bodySmall?.copyWith(
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        color: theme.colorScheme.surfaceContainerHighest,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.people,
+              size: 16,
               color: theme.colorScheme.onSurfaceVariant,
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Text(
+              '${service.currentStations.length} stations nearby',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              Icons.expand_less,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }

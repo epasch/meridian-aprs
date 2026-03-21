@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -12,6 +14,7 @@ enum _PacketFilter {
   msg('MSG'),
   wx('WX'),
   obj('OBJ'),
+  item('ITEM'),
   status('STATUS'),
   micE('MIC-E');
 
@@ -23,22 +26,40 @@ enum _PacketFilter {
 ///
 /// Receives [StationService] from the caller so it shares the same live
 /// connection — no second TCP session is opened.
-class PacketLogScreen extends StatefulWidget {
+class PacketLogScreen extends StatelessWidget {
   const PacketLogScreen({super.key, required this.service});
 
   final StationService service;
 
   @override
-  State<PacketLogScreen> createState() => _PacketLogScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Packet Log')),
+      body: PacketLogBody(service: service),
+    );
+  }
 }
 
-class _PacketLogScreenState extends State<PacketLogScreen> {
+/// Embeddable packet log body — filter bar + scrolling packet list.
+///
+/// Used by [PacketLogScreen] (full-screen push) and desktop side panel.
+class PacketLogBody extends StatefulWidget {
+  const PacketLogBody({super.key, required this.service});
+
+  final StationService service;
+
+  @override
+  State<PacketLogBody> createState() => _PacketLogBodyState();
+}
+
+class _PacketLogBodyState extends State<PacketLogBody> {
   /// Rolling buffer mirroring [StationService.recentPackets].
   final List<AprsPacket> _packets = [];
 
   _PacketFilter _filter = _PacketFilter.all;
 
   final _scrollController = ScrollController();
+  StreamSubscription<AprsPacket>? _subscription;
 
   /// Whether the user has scrolled up (away from the bottom).
   bool _userScrolledUp = false;
@@ -53,13 +74,14 @@ class _PacketLogScreenState extends State<PacketLogScreen> {
     _packets.addAll(widget.service.recentPackets);
 
     // Listen for new packets.
-    widget.service.packetStream.listen(_onPacket);
+    _subscription = widget.service.packetStream.listen(_onPacket);
 
     _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _subscription?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -101,7 +123,8 @@ class _PacketLogScreenState extends State<PacketLogScreen> {
       _PacketFilter.pos => p is PositionPacket,
       _PacketFilter.msg => p is MessagePacket,
       _PacketFilter.wx => p is WeatherPacket,
-      _PacketFilter.obj => p is ObjectPacket || p is ItemPacket,
+      _PacketFilter.obj => p is ObjectPacket,
+      _PacketFilter.item => p is ItemPacket,
       _PacketFilter.status => p is StatusPacket,
       _PacketFilter.micE => p is MicEPacket,
     };
@@ -112,59 +135,37 @@ class _PacketLogScreenState extends State<PacketLogScreen> {
     final theme = Theme.of(context);
     final filtered = _filtered;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Packet Log'),
-        actions: [
-          if (_userScrolledUp)
-            IconButton(
-              icon: const Icon(Icons.vertical_align_top),
-              tooltip: 'Jump to newest',
-              onPressed: () {
-                _userScrolledUp = false;
-                if (_scrollController.hasClients) {
-                  _scrollController.animateTo(
-                    0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
-                }
-              },
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _FilterBar(
-            selected: _filter,
-            onChanged: (f) => setState(() {
-              _filter = f;
-              _userScrolledUp = false;
-            }),
-          ),
-          Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      'No packets yet',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) => _PacketRow(
-                      packet: filtered[index],
-                      timeFmt: _timeFmt,
-                      onTap: () =>
-                          showPacketDetailSheet(context, filtered[index]),
+    return Column(
+      children: [
+        _FilterBar(
+          selected: _filter,
+          onChanged: (f) => setState(() {
+            _filter = f;
+            _userScrolledUp = false;
+          }),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Text(
+                    'No packets yet',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-          ),
-        ],
-      ),
+                )
+              : ListView.builder(
+                  controller: _scrollController,
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) => _PacketRow(
+                    packet: filtered[index],
+                    timeFmt: _timeFmt,
+                    onTap: () =>
+                        showPacketDetailSheet(context, filtered[index]),
+                  ),
+                ),
+        ),
+      ],
     );
   }
 }

@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'aprs_transport.dart';
 
+// TODO(web): replace with WebSocketTransport — see ADR-004
 class AprsIsTransport implements AprsTransport {
   final String host;
   final int port;
@@ -19,24 +22,55 @@ class AprsIsTransport implements AprsTransport {
 
   Socket? _socket;
   final _controller = StreamController<String>.broadcast();
+  final _stateController = StreamController<ConnectionStatus>.broadcast();
+  ConnectionStatus _currentStatus = ConnectionStatus.disconnected;
 
   @override
   Stream<String> get lines => _controller.stream;
 
   @override
+  Stream<ConnectionStatus> get connectionState => _stateController.stream;
+
+  @override
+  ConnectionStatus get currentStatus => _currentStatus;
+
+  @override
   Future<void> connect() async {
-    _socket = await Socket.connect(host, port);
-    _socket!.write(loginLine);
-    if (filterLine != null) _socket!.write(filterLine);
-    _socket!
-        .cast<List<int>>()
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen(
-          _controller.add,
-          onError: _controller.addError,
-          onDone: _controller.close,
-        );
+    assert(
+      !kIsWeb,
+      'AprsIsTransport uses dart:io and cannot run on web. '
+      'Implement WebSocketTransport per ADR-004.',
+    );
+    _currentStatus = ConnectionStatus.connecting;
+    _stateController.add(ConnectionStatus.connecting);
+    try {
+      _socket = await Socket.connect(host, port);
+      _socket!.write(loginLine);
+      if (filterLine != null) _socket!.write(filterLine);
+      _currentStatus = ConnectionStatus.connected;
+      _stateController.add(ConnectionStatus.connected);
+      _socket!
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+            _controller.add,
+            onError: (e) {
+              _currentStatus = ConnectionStatus.disconnected;
+              _stateController.add(ConnectionStatus.disconnected);
+              _controller.addError(e);
+            },
+            onDone: () {
+              _currentStatus = ConnectionStatus.disconnected;
+              _stateController.add(ConnectionStatus.disconnected);
+              _controller.close();
+            },
+          );
+    } catch (e) {
+      _currentStatus = ConnectionStatus.disconnected;
+      _stateController.add(ConnectionStatus.disconnected);
+      rethrow;
+    }
   }
 
   @override
@@ -46,5 +80,6 @@ class AprsIsTransport implements AprsTransport {
   Future<void> disconnect() async {
     await _socket?.close();
     _socket = null;
+    await _stateController.close();
   }
 }
