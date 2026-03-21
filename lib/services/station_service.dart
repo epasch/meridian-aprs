@@ -64,16 +64,25 @@ class StationService {
   // ---------------------------------------------------------------------------
 
   Future<void> start() async {
-    try {
-      await _transport.connect();
-    } catch (e) {
-      debugPrint('APRS-IS connection failed: $e');
-    }
+    // Wire up the line stream once — persists across reconnects.
     _transport.lines.listen(
       _handleLine,
       onError: (e) => debugPrint('Transport error: $e'),
       onDone: () => debugPrint('Transport connection closed'),
     );
+    await connectAprsIs();
+  }
+
+  Future<void> connectAprsIs() async {
+    try {
+      await _transport.connect();
+    } catch (e) {
+      debugPrint('APRS-IS connection failed: $e');
+    }
+  }
+
+  Future<void> disconnectAprsIs() async {
+    await _transport.disconnect();
   }
 
   void updateFilter(double lat, double lon, {int radiusKm = 150}) {

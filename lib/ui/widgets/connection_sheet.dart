@@ -37,6 +37,7 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
   late List<String> _availablePorts;
   String? _selectedPort;
   StreamSubscription<ConnectionStatus>? _tncSub;
+  StreamSubscription<ConnectionStatus>? _aprsSub;
 
   static bool get _isTncPlatform =>
       !kIsWeb &&
@@ -64,11 +65,17 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
     _tncSub = widget.tncService.connectionState.listen((status) {
       if (mounted) setState(() {});
     });
+
+    // Subscribe to APRS-IS connection state to rebuild on changes.
+    _aprsSub = widget.stationService.connectionState.listen((status) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _tncSub?.cancel();
+    _aprsSub?.cancel();
     super.dispose();
   }
 
@@ -96,6 +103,14 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
     await widget.tncService.disconnect();
   }
 
+  Future<void> _onAprsConnectTap() async {
+    await widget.stationService.connectAprsIs();
+  }
+
+  Future<void> _onAprsDisconnectTap() async {
+    await widget.stationService.disconnectAprsIs();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -110,29 +125,54 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
         children: [
           // ── APRS-IS section ─────────────────────────────────────────────
           _SectionHeader('APRS-IS'),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Internet gateway connection',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
-                  MeridianStatusPill(label: 'APRS-IS', status: aprsStatus),
-                ],
-              ),
-            ),
-          ),
+          _buildAprsCard(theme, aprsStatus),
           const SizedBox(height: 20),
 
           // ── TNC section ──────────────────────────────────────────────────
           _SectionHeader('TNC'),
           if (!_isTncPlatform) _TncUnavailableCard() else _buildTncCard(theme, tncStatus),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAprsCard(ThemeData theme, ConnectionStatus aprsStatus) {
+    final isConnected = aprsStatus == ConnectionStatus.connected;
+    final isConnecting = aprsStatus == ConnectionStatus.connecting;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Internet gateway connection',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+                MeridianStatusPill(label: 'APRS-IS', status: aprsStatus),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: isConnected
+                  ? OutlinedButton(
+                      onPressed: _onAprsDisconnectTap,
+                      child: const Text('Disconnect'),
+                    )
+                  : FilledButton(
+                      onPressed: isConnecting ? null : _onAprsConnectTap,
+                      child: Text(isConnecting ? 'Connecting\u2026' : 'Connect'),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
