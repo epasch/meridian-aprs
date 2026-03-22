@@ -168,9 +168,9 @@ class _AppColorSection extends StatelessWidget {
             children: [
               Text(
                 subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: onSurfaceVariant,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: onSurfaceVariant),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -203,16 +203,17 @@ class _AppColorSection extends StatelessWidget {
                     ),
                   // Fixed seed swatches.
                   ..._swatches.map((swatch) {
-                    final isSelected = !controller.useDynamicColor &&
+                    final isSelected =
+                        !controller.useDynamicColor &&
                         controller.seedColor.toARGB32() ==
                             swatch.color.toARGB32();
                     return _ColorSwatch(
                       label: swatch.label,
                       isSelected: isSelected,
                       outline: outline,
-                      onTap: () => context
-                          .read<ThemeController>()
-                          .setSeedColor(swatch.color),
+                      onTap: () => context.read<ThemeController>().setSeedColor(
+                        swatch.color,
+                      ),
                       child: ColoredBox(color: swatch.color),
                     );
                   }),
@@ -271,7 +272,11 @@ class _ColorSwatch extends StatelessWidget {
                   ),
                 ),
               if (isSelected)
-                Icon(Symbols.check, color: Theme.of(context).colorScheme.onPrimary, size: 20),
+                Icon(
+                  Symbols.check,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  size: 20,
+                ),
             ],
           ),
         ),
@@ -293,7 +298,10 @@ class _MyStationSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeader('My Station'),
-        ListTile(title: Text('Callsign'), trailing: Icon(Symbols.chevron_right)),
+        ListTile(
+          title: Text('Callsign'),
+          trailing: Icon(Symbols.chevron_right),
+        ),
         ListTile(title: Text('SSID'), trailing: Icon(Symbols.chevron_right)),
         ListTile(title: Text('Symbol'), trailing: Icon(Symbols.chevron_right)),
         ListTile(title: Text('Comment'), trailing: Icon(Symbols.chevron_right)),
@@ -323,7 +331,10 @@ class _BeaconingSection extends StatelessWidget {
           value: false,
           onChanged: null, // Stub — not yet functional.
         ),
-        ListTile(title: Text('Interval'), trailing: Icon(Symbols.chevron_right)),
+        ListTile(
+          title: Text('Interval'),
+          trailing: Icon(Symbols.chevron_right),
+        ),
       ],
     );
   }

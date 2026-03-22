@@ -52,10 +52,26 @@ class MeridianMap extends StatelessWidget {
   // Lifts CartoDB dark tiles from near-black to a readable dark-gray.
   // Adds ~26/255 (~10%) to every RGB channel without touching alpha.
   static const _darkTileBrightnessFilter = ColorFilter.matrix([
-    1, 0, 0, 0, 26,
-    0, 1, 0, 0, 26,
-    0, 0, 1, 0, 26,
-    0, 0, 0, 1, 0,
+    1,
+    0,
+    0,
+    0,
+    26,
+    0,
+    1,
+    0,
+    0,
+    26,
+    0,
+    0,
+    1,
+    0,
+    26,
+    0,
+    0,
+    0,
+    1,
+    0,
   ]);
 
   @override

@@ -82,11 +82,11 @@ class _MobileScaffoldState extends State<MobileScaffold> {
 
     final route = switch (index) {
       1 => MaterialPageRoute<void>(
-          builder: (_) => PacketLogScreen(service: widget.service),
-        ),
+        builder: (_) => PacketLogScreen(service: widget.service),
+      ),
       2 => MaterialPageRoute<void>(
-          builder: (_) => StationListScreen(service: widget.service),
-        ),
+        builder: (_) => StationListScreen(service: widget.service),
+      ),
       _ => null,
     };
 
