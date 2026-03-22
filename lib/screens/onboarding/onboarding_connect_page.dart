@@ -2,8 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-
-import '../../theme/meridian_colors.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// Third onboarding page — connection method selection.
 ///
@@ -52,7 +51,7 @@ class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
             _OptionCard(
               index: 0,
               selectedIndex: _selectedOption,
-              icon: Icons.wifi,
+              icon: Symbols.wifi,
               title: 'APRS-IS',
               subtitle: 'Connect via internet. No hardware required.',
               dimmed: false,
@@ -62,7 +61,7 @@ class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
             _OptionCard(
               index: 1,
               selectedIndex: _selectedOption,
-              icon: Icons.bluetooth,
+              icon: Symbols.bluetooth,
               title: 'BLE TNC',
               subtitle: 'Coming in v0.4',
               dimmed: true,
@@ -72,7 +71,7 @@ class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
             _OptionCard(
               index: 2,
               selectedIndex: _selectedOption,
-              icon: Icons.usb,
+              icon: Symbols.usb,
               title: 'USB TNC',
               subtitle: 'Connect via USB serial cable',
               dimmed:
@@ -89,12 +88,10 @@ class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              child: FilledButton(
                 onPressed: () => widget.onStartListening(_selectedOption),
-                style: ElevatedButton.styleFrom(
+                style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: MeridianColors.signal,
-                  foregroundColor: Theme.of(context).colorScheme.surface,
                 ),
                 child: const Text('Start Listening'),
               ),
@@ -179,7 +176,7 @@ class _OptionCard extends StatelessWidget {
                   ),
                 ),
                 if (isSelected)
-                  Icon(Icons.check_circle, color: theme.colorScheme.primary),
+                  Icon(Symbols.check_circle, color: theme.colorScheme.primary),
               ],
             ),
           ),

@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -30,6 +31,8 @@ class DesktopScaffold extends StatefulWidget {
     this.tncConnectionStatus = ConnectionStatus.disconnected,
     this.initialCenter = const LatLng(39.0, -77.0),
     this.initialZoom = 9.0,
+    this.northUpLocked = true,
+    required this.onToggleNorthUp,
   });
 
   final StationService service;
@@ -42,6 +45,8 @@ class DesktopScaffold extends StatefulWidget {
   final ConnectionStatus tncConnectionStatus;
   final LatLng initialCenter;
   final double initialZoom;
+  final bool northUpLocked;
+  final VoidCallback onToggleNorthUp;
 
   @override
   State<DesktopScaffold> createState() => _DesktopScaffoldState();
@@ -70,7 +75,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.menu),
+          icon: const Icon(Symbols.menu),
           tooltip: _navRailExpanded ? 'Collapse sidebar' : 'Expand sidebar',
           onPressed: () => setState(() => _navRailExpanded = !_navRailExpanded),
         ),
@@ -90,13 +95,22 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             ),
           IconButton(
             icon: Icon(
-              _panelVisible ? Icons.view_sidebar : Icons.view_sidebar_outlined,
+              widget.northUpLocked ? Symbols.navigation : Symbols.explore,
+            ),
+            tooltip: widget.northUpLocked
+                ? 'North Up (locked) — tap to unlock'
+                : 'Free rotation — tap to lock North Up',
+            onPressed: widget.onToggleNorthUp,
+          ),
+          IconButton(
+            icon: Icon(
+              _panelVisible ? Symbols.view_sidebar : Symbols.view_sidebar,
             ),
             tooltip: _panelVisible ? 'Hide packet log' : 'Show packet log',
             onPressed: () => setState(() => _panelVisible = !_panelVisible),
           ),
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Symbols.settings),
             tooltip: 'Settings',
             onPressed: widget.onNavigateToSettings,
           ),
@@ -131,28 +145,28 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             },
             destinations: const [
               NavigationRailDestination(
-                icon: Icon(Icons.map_outlined),
-                selectedIcon: Icon(Icons.map),
+                icon: Icon(Symbols.map),
+                selectedIcon: Icon(Symbols.map),
                 label: Text('Map'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.people_outline),
-                selectedIcon: Icon(Icons.people),
+                icon: Icon(Symbols.people),
+                selectedIcon: Icon(Symbols.people),
                 label: Text('Stations'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.message_outlined),
-                selectedIcon: Icon(Icons.message),
+                icon: Icon(Symbols.chat),
+                selectedIcon: Icon(Symbols.chat),
                 label: Text('Messages'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.router_outlined),
-                selectedIcon: Icon(Icons.router),
+                icon: Icon(Symbols.router),
+                selectedIcon: Icon(Symbols.router),
                 label: Text('Connection'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
+                icon: Icon(Symbols.settings),
+                selectedIcon: Icon(Symbols.settings),
                 label: Text('Settings'),
               ),
             ],
@@ -166,6 +180,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
               connectionStatus: widget.connectionStatus,
               initialCenter: widget.initialCenter,
               initialZoom: widget.initialZoom,
+              northUpLocked: widget.northUpLocked,
             ),
           ),
           AnimatedSize(

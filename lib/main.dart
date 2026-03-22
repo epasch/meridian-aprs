@@ -90,9 +90,11 @@ class MeridianApp extends StatelessWidget {
 
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+        if (lightDynamic != null) controller.reportDynamicColorAvailable();
+
         final themes = buildAndroidTheme(
-          dynamicLight: lightDynamic,
-          dynamicDark: darkDynamic,
+          dynamicLight: controller.useDynamicColor ? lightDynamic : null,
+          dynamicDark: controller.useDynamicColor ? darkDynamic : null,
           seedColor: controller.seedColor,
         );
 

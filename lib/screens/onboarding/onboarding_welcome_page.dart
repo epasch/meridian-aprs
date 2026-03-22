@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// First onboarding page — welcome and value proposition.
 ///
@@ -29,7 +30,7 @@ class OnboardingWelcomePage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Spacer(),
-            Icon(Icons.radio, size: 80, color: colorScheme.primary),
+            Icon(Symbols.radio, size: 80, color: colorScheme.primary),
             const SizedBox(height: 24),
             Text(
               'Meridian',
@@ -59,9 +60,9 @@ class OnboardingWelcomePage extends StatelessWidget {
             const Spacer(),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              child: FilledButton(
                 onPressed: onGetStarted,
-                style: ElevatedButton.styleFrom(
+                style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 child: const Text('Get Started'),

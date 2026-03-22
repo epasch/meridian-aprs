@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -30,6 +31,8 @@ class TabletScaffold extends StatefulWidget {
     this.tncConnectionStatus = ConnectionStatus.disconnected,
     this.initialCenter = const LatLng(39.0, -77.0),
     this.initialZoom = 9.0,
+    this.northUpLocked = true,
+    required this.onToggleNorthUp,
   });
 
   final StationService service;
@@ -42,6 +45,8 @@ class TabletScaffold extends StatefulWidget {
   final ConnectionStatus tncConnectionStatus;
   final LatLng initialCenter;
   final double initialZoom;
+  final bool northUpLocked;
+  final VoidCallback onToggleNorthUp;
 
   @override
   State<TabletScaffold> createState() => _TabletScaffoldState();
@@ -82,7 +87,16 @@ class _TabletScaffoldState extends State<TabletScaffold> {
               onTap: () => _showConnectionSheet(context),
             ),
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: Icon(
+              widget.northUpLocked ? Symbols.navigation : Symbols.explore,
+            ),
+            tooltip: widget.northUpLocked
+                ? 'North Up (locked) — tap to unlock'
+                : 'Free rotation — tap to lock North Up',
+            onPressed: widget.onToggleNorthUp,
+          ),
+          IconButton(
+            icon: const Icon(Symbols.settings),
             tooltip: 'Settings',
             onPressed: widget.onNavigateToSettings,
           ),
@@ -124,33 +138,33 @@ class _TabletScaffoldState extends State<TabletScaffold> {
             },
             destinations: const [
               NavigationRailDestination(
-                icon: Icon(Icons.map_outlined),
-                selectedIcon: Icon(Icons.map),
+                icon: Icon(Symbols.map),
+                selectedIcon: Icon(Symbols.map),
                 label: Text('Map'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.list_alt_outlined),
-                selectedIcon: Icon(Icons.list_alt),
+                icon: Icon(Symbols.list_alt),
+                selectedIcon: Icon(Symbols.list_alt),
                 label: Text('Log'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.people_outline),
-                selectedIcon: Icon(Icons.people),
+                icon: Icon(Symbols.people),
+                selectedIcon: Icon(Symbols.people),
                 label: Text('Stations'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.message_outlined),
-                selectedIcon: Icon(Icons.message),
+                icon: Icon(Symbols.chat),
+                selectedIcon: Icon(Symbols.chat),
                 label: Text('Messages'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.router_outlined),
-                selectedIcon: Icon(Icons.router),
+                icon: Icon(Symbols.router),
+                selectedIcon: Icon(Symbols.router),
                 label: Text('Connection'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
+                icon: Icon(Symbols.settings),
+                selectedIcon: Icon(Symbols.settings),
                 label: Text('Settings'),
               ),
             ],
@@ -167,6 +181,7 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                     connectionStatus: widget.connectionStatus,
                     initialCenter: widget.initialCenter,
                     initialZoom: widget.initialZoom,
+                    northUpLocked: widget.northUpLocked,
                   ),
                 ),
                 // Collapsed bottom panel — tapping opens the full packet log.
@@ -206,7 +221,7 @@ class _BottomPanel extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              Icons.people,
+              Symbols.people,
               size: 16,
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -219,7 +234,7 @@ class _BottomPanel extends StatelessWidget {
             ),
             const Spacer(),
             Icon(
-              Icons.expand_less,
+              Symbols.expand_less,
               size: 16,
               color: theme.colorScheme.onSurfaceVariant,
             ),

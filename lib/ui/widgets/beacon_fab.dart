@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../theme/meridian_colors.dart';
 
@@ -79,15 +81,19 @@ class _BeaconFABState extends State<BeaconFAB>
       child: Semantics(
         label: widget.isBeaconing ? 'Stop beaconing' : 'Start beacon',
         button: true,
-        child: FloatingActionButton.large(
+        child: FloatingActionButton.extended(
           heroTag: 'beacon_fab',
-          onPressed: widget.onTap,
+          onPressed: () {
+            HapticFeedback.mediumImpact();
+            widget.onTap();
+          },
           backgroundColor: bgColor,
           foregroundColor: fgColor,
           tooltip: widget.isBeaconing ? 'Stop beaconing' : 'Send beacon',
-          child: Icon(
-            widget.isBeaconing ? Icons.wifi_tethering : Icons.podcasts,
+          icon: Icon(
+            widget.isBeaconing ? Symbols.wifi_tethering : Symbols.podcasts,
           ),
+          label: Text(widget.isBeaconing ? 'Beaconing' : 'Beacon'),
         ),
       ),
     );

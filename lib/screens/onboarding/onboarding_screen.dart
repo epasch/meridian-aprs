@@ -1,3 +1,4 @@
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -72,15 +73,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => MapScreen(
-            service: service,
-            tncService: tncService,
-            callsign: effectiveCallsign,
-            ssid: _ssid,
-            initialLat: mapLat,
-            initialLon: mapLon,
-          ),
+        PageRouteBuilder<void>(
+          transitionDuration: const Duration(milliseconds: 300),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              FadeThroughTransition(
+                animation: animation,
+                secondaryAnimation: secondaryAnimation,
+                child: MapScreen(
+                  service: service,
+                  tncService: tncService,
+                  callsign: effectiveCallsign,
+                  ssid: _ssid,
+                  initialLat: mapLat,
+                  initialLon: mapLon,
+                ),
+              ),
         ),
       );
     }

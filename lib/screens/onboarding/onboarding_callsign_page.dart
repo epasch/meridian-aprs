@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../ui/widgets/callsign_field.dart';
 
@@ -111,7 +112,7 @@ class _OnboardingCallsignPageState extends State<OnboardingCallsignPage> {
                   labelText: 'APRS-IS Passcode',
                   hintText: 'Leave blank for receive-only',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock_outline),
+                  prefixIcon: Icon(Symbols.lock),
                 ),
               ),
               const SizedBox(height: 8),
@@ -136,9 +137,9 @@ class _OnboardingCallsignPageState extends State<OnboardingCallsignPage> {
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: FilledButton(
                   onPressed: _onNext,
-                  style: ElevatedButton.styleFrom(
+                  style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: const Text('Next'),

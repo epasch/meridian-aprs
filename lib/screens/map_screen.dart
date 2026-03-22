@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -59,6 +60,7 @@ class _MapScreenState extends State<MapScreen> {
   late ConnectionStatus _connectionStatus;
   ConnectionStatus _tncConnectionStatus = ConnectionStatus.disconnected;
   StreamSubscription<ConnectionStatus>? _tncStatusSub;
+  bool _northUpLocked = true;
 
   // Tile URL constants.
   static const _lightTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -183,6 +185,12 @@ class _MapScreenState extends State<MapScreen> {
     return brightness == Brightness.dark ? _darkTileUrl : _lightTileUrl;
   }
 
+  void _toggleNorthUp() {
+    HapticFeedback.lightImpact();
+    setState(() => _northUpLocked = !_northUpLocked);
+    if (_northUpLocked) _mapController.rotate(0);
+  }
+
   void _navigateToSettings() {
     Navigator.push(
       context,
@@ -203,6 +211,8 @@ class _MapScreenState extends State<MapScreen> {
       tncConnectionStatus: _tncConnectionStatus,
       initialCenter: LatLng(widget.initialLat, widget.initialLon),
       initialZoom: widget.initialZoom,
+      northUpLocked: _northUpLocked,
+      onToggleNorthUp: _toggleNorthUp,
     );
   }
 }

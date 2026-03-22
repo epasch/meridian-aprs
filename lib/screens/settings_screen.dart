@@ -2,6 +2,8 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
 import '../core/transport/tnc_config.dart';
@@ -91,17 +93,17 @@ class _AppearanceSection extends StatelessWidget {
             segments: const [
               ButtonSegment(
                 value: ThemeMode.light,
-                icon: Icon(Icons.light_mode),
+                icon: Icon(Symbols.light_mode),
                 label: Text('Light'),
               ),
               ButtonSegment(
                 value: ThemeMode.dark,
-                icon: Icon(Icons.dark_mode),
+                icon: Icon(Symbols.dark_mode),
                 label: Text('Dark'),
               ),
               ButtonSegment(
                 value: ThemeMode.system,
-                icon: Icon(Icons.brightness_auto),
+                icon: Icon(Symbols.brightness_auto),
                 label: Text('Auto'),
               ),
             ],
@@ -124,8 +126,9 @@ class _AppearanceSection extends StatelessWidget {
 
 /// Seed color picker shown only on Android.
 ///
-/// On Android 12+ the selected color is used only as a fallback when dynamic
-/// color is unavailable. On Android 11 and below it is always active.
+/// On Android 12+ a "System" swatch appears first — selecting it re-enables
+/// wallpaper-derived dynamic color. On Android 11 and below only the fixed
+/// seed swatches are shown (dynamic color is not available on those devices).
 /// Hidden on iOS and desktop — the seed has no effect there.
 class _AppColorSection extends StatelessWidget {
   const _AppColorSection();
@@ -147,7 +150,12 @@ class _AppColorSection extends StatelessWidget {
     if (kIsWeb || !Platform.isAndroid) return const SizedBox.shrink();
 
     final controller = context.watch<ThemeController>();
-    final selected = controller.seedColor;
+    final outline = Theme.of(context).colorScheme.outline;
+    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
+
+    final subtitle = controller.dynamicColorAvailable
+        ? 'Tap a color to override wallpaper theming.'
+        : 'Choose the app accent color.';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,56 +167,115 @@ class _AppColorSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Used when dynamic color is unavailable (Android 11 and below).',
+                subtitle,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
-                children: _swatches.map((swatch) {
-                  final isSelected =
-                      selected.toARGB32() == swatch.color.toARGB32();
-                  return Semantics(
-                    label: swatch.label,
-                    selected: isSelected,
-                    button: true,
-                    child: InkWell(
-                      onTap: () => context.read<ThemeController>().setSeedColor(
-                        swatch.color,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        width: 44,
-                        height: 44,
+                children: [
+                  // "System" swatch — only on Android 12+ (dynamic color capable).
+                  if (controller.dynamicColorAvailable)
+                    _ColorSwatch(
+                      label: 'System',
+                      isSelected: controller.useDynamicColor,
+                      outline: outline,
+                      onTap: () =>
+                          context.read<ThemeController>().setUseDynamicColor(),
+                      child: const DecoratedBox(
                         decoration: BoxDecoration(
-                          color: swatch.color,
                           shape: BoxShape.circle,
-                          border: isSelected
-                              ? Border.all(
-                                  color: Theme.of(context).colorScheme.outline,
-                                  width: 2.5,
-                                )
-                              : null,
+                          gradient: SweepGradient(
+                            colors: [
+                              Color(0xFFEF4444),
+                              Color(0xFFF59E0B),
+                              Color(0xFF10B981),
+                              Color(0xFF2563EB),
+                              Color(0xFF7C3AED),
+                              Color(0xFFEF4444),
+                            ],
+                          ),
                         ),
-                        child: isSelected
-                            ? const Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 20,
-                              )
-                            : null,
                       ),
                     ),
-                  );
-                }).toList(),
+                  // Fixed seed swatches.
+                  ..._swatches.map((swatch) {
+                    final isSelected = !controller.useDynamicColor &&
+                        controller.seedColor.toARGB32() ==
+                            swatch.color.toARGB32();
+                    return _ColorSwatch(
+                      label: swatch.label,
+                      isSelected: isSelected,
+                      outline: outline,
+                      onTap: () => context
+                          .read<ThemeController>()
+                          .setSeedColor(swatch.color),
+                      child: ColoredBox(color: swatch.color),
+                    );
+                  }),
+                ],
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A 44×44 tappable circle swatch used in [_AppColorSection].
+class _ColorSwatch extends StatelessWidget {
+  const _ColorSwatch({
+    required this.label,
+    required this.isSelected,
+    required this.outline,
+    required this.onTap,
+    required this.child,
+  });
+
+  final String label;
+  final bool isSelected;
+  final Color outline;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      selected: isSelected,
+      button: true,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(24),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              ClipOval(child: SizedBox.expand(child: child)),
+              if (isSelected)
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: outline, width: 2.5),
+                  ),
+                ),
+              if (isSelected)
+                Icon(Symbols.check, color: Theme.of(context).colorScheme.onPrimary, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -226,10 +293,10 @@ class _MyStationSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeader('My Station'),
-        ListTile(title: Text('Callsign'), trailing: Icon(Icons.chevron_right)),
-        ListTile(title: Text('SSID'), trailing: Icon(Icons.chevron_right)),
-        ListTile(title: Text('Symbol'), trailing: Icon(Icons.chevron_right)),
-        ListTile(title: Text('Comment'), trailing: Icon(Icons.chevron_right)),
+        ListTile(title: Text('Callsign'), trailing: Icon(Symbols.chevron_right)),
+        ListTile(title: Text('SSID'), trailing: Icon(Symbols.chevron_right)),
+        ListTile(title: Text('Symbol'), trailing: Icon(Symbols.chevron_right)),
+        ListTile(title: Text('Comment'), trailing: Icon(Symbols.chevron_right)),
       ],
     );
   }
@@ -256,7 +323,7 @@ class _BeaconingSection extends StatelessWidget {
           value: false,
           onChanged: null, // Stub — not yet functional.
         ),
-        ListTile(title: Text('Interval'), trailing: Icon(Icons.chevron_right)),
+        ListTile(title: Text('Interval'), trailing: Icon(Symbols.chevron_right)),
       ],
     );
   }
@@ -278,12 +345,12 @@ class _ConnectionSection extends StatelessWidget {
         ListTile(
           title: Text('Default server'),
           subtitle: Text('rotate.aprs2.net:14580'),
-          trailing: Icon(Icons.chevron_right),
+          trailing: Icon(Symbols.chevron_right),
         ),
         ListTile(
           title: Text('Filter'),
           subtitle: Text('Range filter around current position'),
-          trailing: Icon(Icons.chevron_right),
+          trailing: Icon(Symbols.chevron_right),
         ),
       ],
     );
@@ -451,7 +518,7 @@ class _TncSectionState extends State<_TncSection> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ListTile(
-                leading: const Icon(Icons.settings_input_component),
+                leading: const Icon(Symbols.settings_input_component),
                 title: Text(
                   'TNC',
                   style: theme.textTheme.titleMedium?.copyWith(
@@ -508,7 +575,7 @@ class _TncSectionState extends State<_TncSection> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.refresh),
+                          icon: const Icon(Symbols.refresh),
                           tooltip: 'Refresh ports',
                           onPressed: () => setState(() {}),
                         ),
@@ -705,12 +772,12 @@ class _DisplaySection extends StatelessWidget {
         ListTile(
           title: Text('Station timeout'),
           subtitle: Text('Hide stations not heard for this long'),
-          trailing: Icon(Icons.chevron_right),
+          trailing: Icon(Symbols.chevron_right),
         ),
         ListTile(
           title: Text('Trail length'),
           subtitle: Text('Number of position points to show per station'),
-          trailing: Icon(Icons.chevron_right),
+          trailing: Icon(Symbols.chevron_right),
         ),
       ],
     );
@@ -758,7 +825,7 @@ class _AccountSection extends StatelessWidget {
           title: const Text('Sign in'),
           subtitle: const Text('Sign in to sync preferences across devices.'),
           trailing: Icon(
-            Icons.arrow_forward_ios,
+            Symbols.chevron_right,
             size: 16,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -786,7 +853,7 @@ class _AboutSection extends StatelessWidget {
         ListTile(
           title: Text('GitHub'),
           subtitle: Text('https://github.com/epasch/meridian-aprs'),
-          trailing: Icon(Icons.open_in_new, size: 16),
+          trailing: Icon(Symbols.open_in_new, size: 16),
         ),
       ],
     );
