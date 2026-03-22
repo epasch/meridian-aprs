@@ -23,6 +23,7 @@ class MeridianMap extends StatelessWidget {
     this.connectionStatus = ConnectionStatus.disconnected,
     this.initialCenter = const LatLng(39.0, -77.0),
     this.initialZoom = 9.0,
+    this.northUpLocked = true,
   });
 
   final MapController mapController;
@@ -37,11 +38,57 @@ class MeridianMap extends StatelessWidget {
   final LatLng initialCenter;
   final double initialZoom;
 
+  /// When true, map rotation gestures are disabled and the map stays
+  /// oriented north-up. When false, the user can freely rotate the map.
+  final bool northUpLocked;
+
   /// Whether the tile URL requires subdomain rotation (CartoDB dark tiles).
   bool get _usesSubdomains => tileUrl.contains('{s}');
 
+  /// Whether these are dark tiles that need a brightness boost to remain
+  /// readable (CartoDB dark_all is near-black by default).
+  bool get _isDarkTile => tileUrl.contains('dark');
+
+  // Lifts CartoDB dark tiles from near-black to a readable dark-gray.
+  // Adds ~26/255 (~10%) to every RGB channel without touching alpha.
+  static const _darkTileBrightnessFilter = ColorFilter.matrix([
+    1,
+    0,
+    0,
+    0,
+    26,
+    0,
+    1,
+    0,
+    0,
+    26,
+    0,
+    0,
+    1,
+    0,
+    26,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ]);
+
   @override
   Widget build(BuildContext context) {
+    Widget tileLayer = TileLayer(
+      urlTemplate: tileUrl,
+      userAgentPackageName: 'com.meridianaprs.app',
+      subdomains: _usesSubdomains ? const ['a', 'b', 'c', 'd'] : const [],
+    );
+
+    if (_isDarkTile) {
+      tileLayer = ColorFiltered(
+        colorFilter: _darkTileBrightnessFilter,
+        child: tileLayer,
+      );
+    }
+
     return Stack(
       children: [
         FlutterMap(
@@ -49,15 +96,14 @@ class MeridianMap extends StatelessWidget {
           options: MapOptions(
             initialCenter: initialCenter,
             initialZoom: initialZoom,
+            interactionOptions: InteractionOptions(
+              flags: northUpLocked
+                  ? InteractiveFlag.all & ~InteractiveFlag.rotate
+                  : InteractiveFlag.all,
+            ),
           ),
           children: [
-            TileLayer(
-              urlTemplate: tileUrl,
-              userAgentPackageName: 'com.meridianaprs.app',
-              subdomains: _usesSubdomains
-                  ? const ['a', 'b', 'c', 'd']
-                  : const [],
-            ),
+            tileLayer,
             MarkerLayer(markers: markers),
           ],
         ),
@@ -89,7 +135,10 @@ class _ConnectingBanner extends StatelessWidget {
             SizedBox(
               width: 12,
               height: 12,
-              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                strokeCap: StrokeCap.round,
+              ),
             ),
             const SizedBox(width: 10),
             Text(

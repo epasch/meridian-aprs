@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/packet/aprs_packet.dart' show AprsPacket, PacketSource;
 import '../../core/transport/aprs_transport.dart' show ConnectionStatus;
@@ -304,7 +305,7 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                         },
                 ),
                 IconButton(
-                  icon: const Icon(Icons.refresh),
+                  icon: const Icon(Symbols.refresh),
                   tooltip: 'Refresh port list',
                   onPressed: isConnecting
                       ? null
@@ -361,7 +362,7 @@ class _TncUnavailableCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              const Icon(Icons.usb, size: 24),
+              const Icon(Symbols.usb, size: 24),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(

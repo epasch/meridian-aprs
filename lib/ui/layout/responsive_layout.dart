@@ -28,6 +28,8 @@ class ResponsiveLayout extends StatelessWidget {
     this.tncConnectionStatus = ConnectionStatus.disconnected,
     this.initialCenter = const LatLng(39.0, -77.0),
     this.initialZoom = 9.0,
+    this.northUpLocked = true,
+    required this.onToggleNorthUp,
   });
 
   final StationService service;
@@ -40,6 +42,8 @@ class ResponsiveLayout extends StatelessWidget {
   final ConnectionStatus tncConnectionStatus;
   final LatLng initialCenter;
   final double initialZoom;
+  final bool northUpLocked;
+  final VoidCallback onToggleNorthUp;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +61,8 @@ class ResponsiveLayout extends StatelessWidget {
         tncConnectionStatus: tncConnectionStatus,
         initialCenter: initialCenter,
         initialZoom: initialZoom,
+        northUpLocked: northUpLocked,
+        onToggleNorthUp: onToggleNorthUp,
       );
     }
     if (width < 1024) {
@@ -71,6 +77,8 @@ class ResponsiveLayout extends StatelessWidget {
         tncConnectionStatus: tncConnectionStatus,
         initialCenter: initialCenter,
         initialZoom: initialZoom,
+        northUpLocked: northUpLocked,
+        onToggleNorthUp: onToggleNorthUp,
       );
     }
     return DesktopScaffold(
@@ -84,6 +92,8 @@ class ResponsiveLayout extends StatelessWidget {
       tncConnectionStatus: tncConnectionStatus,
       initialCenter: initialCenter,
       initialZoom: initialZoom,
+      northUpLocked: northUpLocked,
+      onToggleNorthUp: onToggleNorthUp,
     );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
-import '../theme/app_theme.dart';
+import '../../theme/meridian_colors.dart';
 
 /// A large FAB that represents the beacon transmit action.
 ///
@@ -64,12 +66,13 @@ class _BeaconFABState extends State<BeaconFAB>
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final bgColor = widget.isBeaconing
-        ? AppColors.danger
-        : Theme.of(context).colorScheme.primary;
+        ? MeridianColors.danger
+        : colorScheme.primary;
     final fgColor = widget.isBeaconing
-        ? AppColors.surfaceLight
-        : Theme.of(context).colorScheme.onPrimary;
+        ? colorScheme.surface
+        : colorScheme.onPrimary;
 
     return ScaleTransition(
       scale: widget.isBeaconing
@@ -78,15 +81,19 @@ class _BeaconFABState extends State<BeaconFAB>
       child: Semantics(
         label: widget.isBeaconing ? 'Stop beaconing' : 'Start beacon',
         button: true,
-        child: FloatingActionButton.large(
+        child: FloatingActionButton.extended(
           heroTag: 'beacon_fab',
-          onPressed: widget.onTap,
+          onPressed: () {
+            HapticFeedback.mediumImpact();
+            widget.onTap();
+          },
           backgroundColor: bgColor,
           foregroundColor: fgColor,
           tooltip: widget.isBeaconing ? 'Stop beaconing' : 'Send beacon',
-          child: Icon(
-            widget.isBeaconing ? Icons.wifi_tethering : Icons.podcasts,
+          icon: Icon(
+            widget.isBeaconing ? Symbols.wifi_tethering : Symbols.podcasts,
           ),
+          label: Text(widget.isBeaconing ? 'Beaconing' : 'Beacon'),
         ),
       ),
     );

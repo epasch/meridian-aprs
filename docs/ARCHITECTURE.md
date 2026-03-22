@@ -146,24 +146,51 @@ The UI layer uses three scaffold variants selected at runtime by window width:
 
 ---
 
-## Theme Token System (UI Foundation)
+## Theme System — Three-Tier Platform Architecture
 
-All colors are defined as static constants on `AppColors` in `lib/ui/theme/app_theme.dart`:
+Meridian uses a three-tier platform theme architecture. Each tier can evolve independently while sharing a common brand identity. The Android tier is implemented; iOS and desktop stubs are in place for future PRs.
 
-| Token | Light | Dark |
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Meridian ThemeController              │
+│         (light/dark mode, seed color preference)        │
+├─────────────────┬───────────────────┬───────────────────┤
+│   Android Tier  │     iOS Tier      │   Desktop Tier    │
+│  M3 Expressive  │  Cupertino (std)  │  M3 Static Brand  │
+│  + Dynamic Color│  → Liquid Glass   │  Windows/macOS/   │
+│  (Android 12+)  │    when Flutter   │  Linux            │
+│  + Seed fallback│    supports it    │                   │
+└─────────────────┴───────────────────┴───────────────────┘
+```
+
+### Brand Tokens (`lib/theme/meridian_colors.dart`)
+
+All hardcoded color values live exclusively in `MeridianColors`. Surface and structural colors come from `Theme.of(context).colorScheme`.
+
+| Token | Value | Usage |
 |---|---|---|
-| Primary | `#2563EB` | `#3B82F6` |
-| Primary variant | `#1D4ED8` | `#2563EB` |
-| Accent (connected) | `#10B981` | `#10B981` |
-| Warning (connecting) | `#F59E0B` | `#F59E0B` |
-| Danger (error/TX) | `#EF4444` | `#EF4444` |
-| Surface | `#FFFFFF` | `#0F172A` |
-| Surface variant | `#F8FAFC` | `#1E293B` |
-| Text | `#0F172A` | `#F1F5F9` |
+| `primary` | `#2563EB` | Meridian Blue — seed input to theme tiers |
+| `primaryDark` | `#1D4ED8` | Primary variant |
+| `signal` | `#10B981` | Connected / received / active |
+| `warning` | `#F59E0B` | Degraded connection / stale data |
+| `danger` | `#EF4444` | Error / TX active indicator |
 
-`AppTheme.lightTheme` and `AppTheme.darkTheme` build `ThemeData` from these tokens using `ColorScheme.fromSeed`. No widget may hard-code a color — all values must come from `Theme.of(context)` or `AppColors`.
+Semantic tokens (`signal`, `warning`, `danger`) carry APRS protocol meaning and must never shift with dynamic color.
 
-`ThemeProvider` (`lib/ui/theme/theme_provider.dart`) extends `ChangeNotifier` and persists the user's `ThemeMode` choice to `SharedPreferences` under key `'theme_mode'`. Default is `ThemeMode.system`. It is provided at the top of the widget tree via `provider`.
+### ThemeController (`lib/theme/theme_controller.dart`)
+
+`ThemeController extends ChangeNotifier` manages two pieces of state: `themeMode` (`ThemeMode`, persisted as int under key `'theme_mode'`) and `seedColor` (`Color`, persisted as `toARGB32()` int under key `'seed_color'`). Provided at the app root via `provider`.
+
+### Android Tier (`lib/theme/android_theme.dart`)
+
+`buildAndroidTheme({ColorScheme? dynamicLight, ColorScheme? dynamicDark, required Color seedColor})` builds the light/dark `ThemeData` pair:
+
+- On Android 12+: uses `DynamicColorBuilder` wallpaper-derived schemes (passed in from `MeridianApp.build()`).
+- On Android < 12, desktop, iOS: falls back to `ColorScheme.fromSeed(seedColor: seedColor)`.
+- Applies M3 Expressive tokens via `withM3ETheme()` from the `m3e_design` package (`M3ETheme` ThemeExtension covering colors, typography, shapes, spacing, motion).
+- Applies M3 Expressive rounded shape ramp (sm=20px, md=28px) to `cardTheme`, `bottomSheetTheme`, `dialogTheme`, `floatingActionButtonTheme`.
+
+`DynamicColorBuilder` wraps `MaterialApp` at the app root in `MeridianApp.build()`. It returns null schemes on platforms that don't support dynamic color — `buildAndroidTheme` handles this via the seed fallback.
 
 The map tile URL is theme-aware: light mode uses OSM standard tiles; dark mode uses CartoDB dark tiles (subdomain rotation via `{s}`).
 
@@ -210,7 +237,10 @@ Pure Dart AX.25 UI frame byte decoder (`lib/core/ax25/ax25_parser.dart`). Decode
 | `flutter_map` | Map rendering with OpenStreetMap tiles |
 | `flutter_blue_plus` | BLE transport (KISS/BLE) |
 | `flutter_libserialport` | USB serial transport (KISS/USB) |
-| `provider` | ThemeProvider ChangeNotifier wiring |
-| `shared_preferences` | Theme mode and onboarding flag persistence |
+| `provider` | ThemeController ChangeNotifier wiring |
+| `shared_preferences` | Theme mode, seed color, and onboarding flag persistence |
+| `dynamic_color` | Android 12+ wallpaper-derived ColorScheme |
+| `m3e_design` | M3 Expressive ThemeExtension (shapes, spacing, motion, typography tokens) |
+| `flutter_m3shapes` | M3 Expressive shape widgets (M3Container) |
 
 No third-party APRS or AX.25 libraries — parsing is implemented in-house in the Packet Core.
