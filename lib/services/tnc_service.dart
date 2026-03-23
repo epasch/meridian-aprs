@@ -11,7 +11,8 @@ import '../core/transport/tnc_config.dart';
 import '../core/transport/transport_manager.dart';
 import 'station_service.dart';
 
-export '../core/transport/transport_manager.dart' show TransportType, ConnectionStatus;
+export '../core/transport/transport_manager.dart'
+    show TransportType, ConnectionStatus;
 
 /// Manages the TNC connection lifecycle and bridges decoded packets to
 /// [StationService].

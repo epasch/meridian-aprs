@@ -357,9 +357,11 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
   }
 
   Widget _buildBleTncCard(ThemeData theme, ConnectionStatus tncStatus) {
-    final isBleConnected = tncStatus == ConnectionStatus.connected &&
+    final isBleConnected =
+        tncStatus == ConnectionStatus.connected &&
         widget.tncService.activeTransportType == TransportType.ble;
-    final isBleConnecting = tncStatus == ConnectionStatus.connecting &&
+    final isBleConnecting =
+        tncStatus == ConnectionStatus.connecting &&
         widget.tncService.activeTransportType == TransportType.ble;
     final errorMessage = isBleConnected || isBleConnecting
         ? null
@@ -435,7 +437,6 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
       ),
     );
   }
-
 }
 
 class _TncUnavailableCard extends StatelessWidget {

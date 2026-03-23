@@ -57,7 +57,10 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
     // On desktop Linux/macOS/Windows BLE may be unavailable.
     final state = await FlutterBluePlus.adapterState.first;
     if (state == BluetoothAdapterState.off) {
-      setState(() => _bleError = 'Bluetooth is off. Enable it in Settings to connect a BLE TNC.');
+      setState(
+        () => _bleError =
+            'Bluetooth is off. Enable it in Settings to connect a BLE TNC.',
+      );
     } else if (state == BluetoothAdapterState.unavailable) {
       setState(() => _bleError = 'Bluetooth is not available on this device.');
     } else if (state == BluetoothAdapterState.unauthorized) {
@@ -77,9 +80,7 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
     _scanSub?.cancel();
 
     try {
-      await FlutterBluePlus.startScan(
-        timeout: const Duration(seconds: 15),
-      );
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
     } on FlutterBluePlusException catch (e) {
       setState(() {
         _bleError = _friendlyBleError(e.description ?? e.toString());
@@ -96,7 +97,9 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
             final advertisedUuids = r.advertisementData.serviceUuids
                 .map((g) => g.str.toLowerCase())
                 .toList();
-            if (!advertisedUuids.contains(kMobilinkdServiceUuid.toLowerCase())) {
+            if (!advertisedUuids.contains(
+              kMobilinkdServiceUuid.toLowerCase(),
+            )) {
               continue;
             }
           }
@@ -127,7 +130,8 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
       if (mounted) {
         setState(() {
           _connectingDeviceId = null;
-          _bleError = 'Could not connect to ${result.device.platformName.isNotEmpty ? result.device.platformName : "device"}. Try again.';
+          _bleError =
+              'Could not connect to ${result.device.platformName.isNotEmpty ? result.device.platformName : "device"}. Try again.';
         });
       }
     }
@@ -152,7 +156,12 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
   }
 
   bool get _isBlePlatform =>
-      !kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS || Platform.isLinux || Platform.isWindows);
+      !kIsWeb &&
+      (Platform.isAndroid ||
+          Platform.isIOS ||
+          Platform.isMacOS ||
+          Platform.isLinux ||
+          Platform.isWindows);
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +191,10 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
           // Title row.
           Row(
             children: [
-              Icon(Symbols.bluetooth_searching, color: theme.colorScheme.primary),
+              Icon(
+                Symbols.bluetooth_searching,
+                color: theme.colorScheme.primary,
+              ),
               const SizedBox(width: 10),
               Text('BLE TNC', style: theme.textTheme.titleMedium),
             ],
@@ -239,10 +251,7 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
                 ],
                 const Spacer(),
                 // Filter toggle.
-                Text(
-                  'Mobilinkd only',
-                  style: theme.textTheme.labelSmall,
-                ),
+                Text('Mobilinkd only', style: theme.textTheme.labelSmall),
                 Switch(
                   value: _filterMobilinkd,
                   onChanged: (v) => setState(() {

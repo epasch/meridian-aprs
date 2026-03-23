@@ -4,17 +4,11 @@ import 'package:test/test.dart';
 void main() {
   group('DeviceResolver.resolve — tocall', () {
     test('APDR16 → APRSdroid', () {
-      expect(
-        DeviceResolver.resolve(tocall: 'APDR16'),
-        equals('APRSdroid'),
-      );
+      expect(DeviceResolver.resolve(tocall: 'APDR16'), equals('APRSdroid'));
     });
 
     test('APDW1.6 → Dire Wolf', () {
-      expect(
-        DeviceResolver.resolve(tocall: 'APDW1.6'),
-        equals('Dire Wolf'),
-      );
+      expect(DeviceResolver.resolve(tocall: 'APDW1.6'), equals('Dire Wolf'));
     });
 
     test('APK004 → Kenwood TH-D7A', () {
@@ -25,31 +19,19 @@ void main() {
     });
 
     test('APWW10 → UI-View32', () {
-      expect(
-        DeviceResolver.resolve(tocall: 'APWW10'),
-        equals('UI-View32'),
-      );
+      expect(DeviceResolver.resolve(tocall: 'APWW10'), equals('UI-View32'));
     });
 
     test('unknown tocall returns null', () {
-      expect(
-        DeviceResolver.resolve(tocall: 'APXXX'),
-        isNull,
-      );
+      expect(DeviceResolver.resolve(tocall: 'APXXX'), isNull);
     });
 
     test('case-insensitive match on lowercase tocall', () {
-      expect(
-        DeviceResolver.resolve(tocall: 'apdr12'),
-        equals('APRSdroid'),
-      );
+      expect(DeviceResolver.resolve(tocall: 'apdr12'), equals('APRSdroid'));
     });
 
     test('tocall with SSID stripped before match', () {
-      expect(
-        DeviceResolver.resolve(tocall: 'APDW-7'),
-        equals('Dire Wolf'),
-      );
+      expect(DeviceResolver.resolve(tocall: 'APDW-7'), equals('Dire Wolf'));
     });
 
     test('APFII prefix → iPhone app (APRS.fi)', () {
@@ -60,17 +42,11 @@ void main() {
     });
 
     test('APAGW prefix → AGWTracker', () {
-      expect(
-        DeviceResolver.resolve(tocall: 'APAGW0'),
-        equals('AGWTracker'),
-      );
+      expect(DeviceResolver.resolve(tocall: 'APAGW0'), equals('AGWTracker'));
     });
 
     test('APRS (generic) matches', () {
-      expect(
-        DeviceResolver.resolve(tocall: 'APRS'),
-        equals('APRS (generic)'),
-      );
+      expect(DeviceResolver.resolve(tocall: 'APRS'), equals('APRS (generic)'));
     });
   });
 
@@ -125,10 +101,7 @@ void main() {
     });
 
     test('generic > suffix with 2-char identifier → returned as device', () {
-      expect(
-        DeviceResolver.resolve(micECommentSuffix: 'hi>AB'),
-        equals('AB'),
-      );
+      expect(DeviceResolver.resolve(micECommentSuffix: 'hi>AB'), equals('AB'));
     });
 
     test('no known pattern → null', () {
@@ -139,10 +112,7 @@ void main() {
     });
 
     test('empty suffix → null', () {
-      expect(
-        DeviceResolver.resolve(micECommentSuffix: ''),
-        isNull,
-      );
+      expect(DeviceResolver.resolve(micECommentSuffix: ''), isNull);
     });
 
     test('generic > suffix that is too long (>10 chars) → null', () {
@@ -153,10 +123,7 @@ void main() {
     });
 
     test('generic > suffix that is 1 char → null (too short)', () {
-      expect(
-        DeviceResolver.resolve(micECommentSuffix: 'comment>X'),
-        isNull,
-      );
+      expect(DeviceResolver.resolve(micECommentSuffix: 'comment>X'), isNull);
     });
   });
 

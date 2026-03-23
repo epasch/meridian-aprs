@@ -58,7 +58,10 @@ class TransportManager extends ChangeNotifier {
   ///
   /// Disconnects any currently active transport first.
   /// Pass [adapter] to inject a fake for tests.
-  Future<void> connectSerial(TncConfig config, {SerialPortAdapter? adapter}) async {
+  Future<void> connectSerial(
+    TncConfig config, {
+    SerialPortAdapter? adapter,
+  }) async {
     await disconnect();
     final transport = SerialKissTransport(config, adapter: adapter);
     _attach(transport, TransportType.serial);

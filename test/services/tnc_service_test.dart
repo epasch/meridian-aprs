@@ -152,11 +152,17 @@ void main() {
     // 2 -----------------------------------------------------------------------
     test('connect via transportManager transitions to connected', () async {
       final fakeAdapter = FakeSerialPortAdapter();
-      final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
+      final config = TncConfig.fromPreset(
+        TncPreset.mobilinkdTnc4,
+        port: '/dev/ttyFAKE',
+      );
 
       // TncService.connect() calls _transportManager.connectSerial() without
       // adapter injection. We drive via the exposed transportManager instead.
-      await tncService.transportManager.connectSerial(config, adapter: fakeAdapter);
+      await tncService.transportManager.connectSerial(
+        config,
+        adapter: fakeAdapter,
+      );
 
       expect(tncService.currentStatus, ConnectionStatus.connected);
       expect(tncService.activeTransportType, TransportType.serial);
@@ -189,27 +195,33 @@ void main() {
       'full pipeline: KISS bytes from serial adapter reach packetStream',
       () async {
         final fakeAdapter = FakeSerialPortAdapter();
-        final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
+        final config = TncConfig.fromPreset(
+          TncPreset.mobilinkdTnc4,
+          port: '/dev/ttyFAKE',
+        );
 
         // Subscribe to packetStream before connecting.
         final packets = <AprsPacket>[];
         final sub = stationService.packetStream.listen(packets.add);
 
         // Connect transport.
-        await tncService.transportManager.connectSerial(config, adapter: fakeAdapter);
+        await tncService.transportManager.connectSerial(
+          config,
+          adapter: fakeAdapter,
+        );
 
         // Wire the frame bridge manually — replicates TncService._onFrame.
         // (TncService._attachBridge is called only by tncService.connect(),
         // which bypasses adapter injection. We drive the manager directly and
         // replicate the bridge logic here to observe the full pipeline.)
-        final bridgeSub = tncService.transportManager.frameStream.listen(
-          (frameBytes) {
-            final packet = parser.parseFrame(frameBytes);
-            if (packet.rawLine.isNotEmpty) {
-              stationService.ingestLine(packet.rawLine);
-            }
-          },
-        );
+        final bridgeSub = tncService.transportManager.frameStream.listen((
+          frameBytes,
+        ) {
+          final packet = parser.parseFrame(frameBytes);
+          if (packet.rawLine.isNotEmpty) {
+            stationService.ingestLine(packet.rawLine);
+          }
+        });
 
         const aprsInfo = '!4903.50N/07201.75W-Bridge test';
         final kissBytes = _buildKissFrame('KD9TST', 'APRS', aprsInfo);
@@ -256,18 +268,27 @@ void main() {
     });
 
     // 7 -----------------------------------------------------------------------
-    test('disconnect() transitions status to disconnected and type to none', () async {
-      final fakeAdapter = FakeSerialPortAdapter();
-      final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
+    test(
+      'disconnect() transitions status to disconnected and type to none',
+      () async {
+        final fakeAdapter = FakeSerialPortAdapter();
+        final config = TncConfig.fromPreset(
+          TncPreset.mobilinkdTnc4,
+          port: '/dev/ttyFAKE',
+        );
 
-      await tncService.transportManager.connectSerial(config, adapter: fakeAdapter);
-      expect(tncService.currentStatus, ConnectionStatus.connected);
+        await tncService.transportManager.connectSerial(
+          config,
+          adapter: fakeAdapter,
+        );
+        expect(tncService.currentStatus, ConnectionStatus.connected);
 
-      await tncService.disconnect();
+        await tncService.disconnect();
 
-      expect(tncService.currentStatus, ConnectionStatus.disconnected);
-      expect(tncService.activeTransportType, TransportType.none);
-    });
+        expect(tncService.currentStatus, ConnectionStatus.disconnected);
+        expect(tncService.activeTransportType, TransportType.none);
+      },
+    );
 
     // 8 -----------------------------------------------------------------------
     test('lastErrorMessage is null before any connection attempt', () {

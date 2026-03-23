@@ -113,8 +113,7 @@ class _MobileScaffoldState extends State<MobileScaffold> {
           ),
           if (!kIsWeb &&
               (widget.tncConnectionStatus != ConnectionStatus.disconnected ||
-                  widget.tncService.activeTransportType !=
-                      TransportType.none))
+                  widget.tncService.activeTransportType != TransportType.none))
             MeridianStatusPill(
               label: _tncPillLabel(widget.tncService.activeTransportType),
               status: widget.tncConnectionStatus,

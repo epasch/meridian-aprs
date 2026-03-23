@@ -135,7 +135,10 @@ List<int> _encodeAddr(String callsign, int ssid, {bool last = false}) {
 }
 
 Uint8List _buildRawAx25(String src, String dst, String aprsInfo) {
-  final addr = <int>[..._encodeAddr(dst, 0), ..._encodeAddr(src, 0, last: true)];
+  final addr = <int>[
+    ..._encodeAddr(dst, 0),
+    ..._encodeAddr(src, 0, last: true),
+  ];
   return Uint8List.fromList([...addr, 0x03, 0xF0, ...aprsInfo.codeUnits]);
 }
 
@@ -162,53 +165,74 @@ void main() {
     });
 
     // 1 -----------------------------------------------------------------------
-    test('initial state: no active transport, type is none, isConnected is false', () {
-      expect(manager.activeTransport, isNull);
-      expect(manager.activeType, TransportType.none);
-      expect(manager.isConnected, isFalse);
-      expect(manager.currentStatus, ConnectionStatus.disconnected);
-    });
+    test(
+      'initial state: no active transport, type is none, isConnected is false',
+      () {
+        expect(manager.activeTransport, isNull);
+        expect(manager.activeType, TransportType.none);
+        expect(manager.isConnected, isFalse);
+        expect(manager.currentStatus, ConnectionStatus.disconnected);
+      },
+    );
 
     // 2 -----------------------------------------------------------------------
-    test('connectSerial with FakeSerialPortAdapter attaches transport and connects', () async {
-      final fakeAdapter = FakeSerialPortAdapter();
-      final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
+    test(
+      'connectSerial with FakeSerialPortAdapter attaches transport and connects',
+      () async {
+        final fakeAdapter = FakeSerialPortAdapter();
+        final config = TncConfig.fromPreset(
+          TncPreset.mobilinkdTnc4,
+          port: '/dev/ttyFAKE',
+        );
 
-      await manager.connectSerial(config, adapter: fakeAdapter);
+        await manager.connectSerial(config, adapter: fakeAdapter);
 
-      expect(manager.activeType, TransportType.serial);
-      expect(manager.isConnected, isTrue);
-      expect(manager.currentStatus, ConnectionStatus.connected);
-      expect(fakeAdapter.openCalled, isTrue);
-    });
+        expect(manager.activeType, TransportType.serial);
+        expect(manager.isConnected, isTrue);
+        expect(manager.currentStatus, ConnectionStatus.connected);
+        expect(fakeAdapter.openCalled, isTrue);
+      },
+    );
 
     // 3 -----------------------------------------------------------------------
-    test('connectionState re-publishes events from the active transport', () async {
-      final fakeAdapter = FakeSerialPortAdapter();
-      final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
+    test(
+      'connectionState re-publishes events from the active transport',
+      () async {
+        final fakeAdapter = FakeSerialPortAdapter();
+        final config = TncConfig.fromPreset(
+          TncPreset.mobilinkdTnc4,
+          port: '/dev/ttyFAKE',
+        );
 
-      final capturedStates = <ConnectionStatus>[];
-      final sub = manager.connectionState.listen(capturedStates.add);
+        final capturedStates = <ConnectionStatus>[];
+        final sub = manager.connectionState.listen(capturedStates.add);
 
-      await manager.connectSerial(config, adapter: fakeAdapter);
+        await manager.connectSerial(config, adapter: fakeAdapter);
 
-      // Flush microtasks: the manager's _stateController is a broadcast stream
-      // with async delivery (two hops: transport → manager → test), so events
-      // may not arrive until after the current microtask queue is drained.
-      await Future<void>.delayed(Duration.zero);
+        // Flush microtasks: the manager's _stateController is a broadcast stream
+        // with async delivery (two hops: transport → manager → test), so events
+        // may not arrive until after the current microtask queue is drained.
+        await Future<void>.delayed(Duration.zero);
 
-      await sub.cancel();
+        await sub.cancel();
 
-      expect(
-        capturedStates,
-        containsAll([ConnectionStatus.connecting, ConnectionStatus.connected]),
-      );
-    });
+        expect(
+          capturedStates,
+          containsAll([
+            ConnectionStatus.connecting,
+            ConnectionStatus.connected,
+          ]),
+        );
+      },
+    );
 
     // 4 -----------------------------------------------------------------------
     test('frameStream re-publishes frames from the active transport', () async {
       final fakeAdapter = FakeSerialPortAdapter();
-      final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
+      final config = TncConfig.fromPreset(
+        TncPreset.mobilinkdTnc4,
+        port: '/dev/ttyFAKE',
+      );
 
       await manager.connectSerial(config, adapter: fakeAdapter);
 
@@ -229,23 +253,29 @@ void main() {
     });
 
     // 5 -----------------------------------------------------------------------
-    test('disconnect() transitions to disconnected and sets type to none', () async {
-      final fakeAdapter = FakeSerialPortAdapter();
-      final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
-      await manager.connectSerial(config, adapter: fakeAdapter);
+    test(
+      'disconnect() transitions to disconnected and sets type to none',
+      () async {
+        final fakeAdapter = FakeSerialPortAdapter();
+        final config = TncConfig.fromPreset(
+          TncPreset.mobilinkdTnc4,
+          port: '/dev/ttyFAKE',
+        );
+        await manager.connectSerial(config, adapter: fakeAdapter);
 
-      final capturedStates = <ConnectionStatus>[];
-      final sub = manager.connectionState.listen(capturedStates.add);
+        final capturedStates = <ConnectionStatus>[];
+        final sub = manager.connectionState.listen(capturedStates.add);
 
-      await manager.disconnect();
-      await Future<void>.delayed(Duration.zero);
+        await manager.disconnect();
+        await Future<void>.delayed(Duration.zero);
 
-      await sub.cancel();
+        await sub.cancel();
 
-      expect(manager.activeType, TransportType.none);
-      expect(manager.isConnected, isFalse);
-      expect(capturedStates, contains(ConnectionStatus.disconnected));
-    });
+        expect(manager.activeType, TransportType.none);
+        expect(manager.isConnected, isFalse);
+        expect(capturedStates, contains(ConnectionStatus.disconnected));
+      },
+    );
 
     // 6 -----------------------------------------------------------------------
     test('disconnect() with no active transport does not throw', () async {
@@ -254,22 +284,28 @@ void main() {
     });
 
     // 7 -----------------------------------------------------------------------
-    test('calling connectSerial twice disconnects previous transport first', () async {
-      final fakeAdapter1 = FakeSerialPortAdapter();
-      final fakeAdapter2 = FakeSerialPortAdapter();
-      final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
+    test(
+      'calling connectSerial twice disconnects previous transport first',
+      () async {
+        final fakeAdapter1 = FakeSerialPortAdapter();
+        final fakeAdapter2 = FakeSerialPortAdapter();
+        final config = TncConfig.fromPreset(
+          TncPreset.mobilinkdTnc4,
+          port: '/dev/ttyFAKE',
+        );
 
-      await manager.connectSerial(config, adapter: fakeAdapter1);
-      expect(fakeAdapter1.openCalled, isTrue);
+        await manager.connectSerial(config, adapter: fakeAdapter1);
+        expect(fakeAdapter1.openCalled, isTrue);
 
-      await manager.connectSerial(config, adapter: fakeAdapter2);
+        await manager.connectSerial(config, adapter: fakeAdapter2);
 
-      // The first adapter should have been closed when replaced.
-      expect(fakeAdapter1.closeCalled, isTrue);
-      expect(fakeAdapter2.openCalled, isTrue);
-      expect(manager.activeType, TransportType.serial);
-      expect(manager.isConnected, isTrue);
-    });
+        // The first adapter should have been closed when replaced.
+        expect(fakeAdapter1.closeCalled, isTrue);
+        expect(fakeAdapter2.openCalled, isTrue);
+        expect(manager.activeType, TransportType.serial);
+        expect(manager.isConnected, isTrue);
+      },
+    );
 
     // 8 -----------------------------------------------------------------------
     test('notifyListeners is called on state changes', () async {
@@ -277,7 +313,10 @@ void main() {
       manager.addListener(() => notifyCount++);
 
       final fakeAdapter = FakeSerialPortAdapter();
-      final config = TncConfig.fromPreset(TncPreset.mobilinkdTnc4, port: '/dev/ttyFAKE');
+      final config = TncConfig.fromPreset(
+        TncPreset.mobilinkdTnc4,
+        port: '/dev/ttyFAKE',
+      );
       await manager.connectSerial(config, adapter: fakeAdapter);
       await Future<void>.delayed(Duration.zero);
 

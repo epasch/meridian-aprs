@@ -1007,24 +1007,24 @@ class AprsParser {
 
   static const _micEMessages = [
     'Emergency', // 0b000
-    'Priority',  // 0b001
-    'Special',   // 0b010
+    'Priority', // 0b001
+    'Special', // 0b010
     'Committed', // 0b011
     'Returning', // 0b100
     'In Service', // 0b101
-    'En Route',  // 0b110
-    'Off Duty',  // 0b111
+    'En Route', // 0b110
+    'Off Duty', // 0b111
   ];
 
   static const _micECustomMessages = [
     'Emergency', // 0b000 — Emergency regardless of table
-    'Custom-0',  // 0b001
-    'Custom-1',  // 0b010
-    'Custom-2',  // 0b011
-    'Custom-3',  // 0b100
-    'Custom-4',  // 0b101
-    'Custom-5',  // 0b110
-    'Custom-6',  // 0b111
+    'Custom-0', // 0b001
+    'Custom-1', // 0b010
+    'Custom-2', // 0b011
+    'Custom-3', // 0b100
+    'Custom-4', // 0b101
+    'Custom-5', // 0b110
+    'Custom-6', // 0b111
   ];
 
   AprsPacket _parseMicE({
@@ -1096,9 +1096,11 @@ class AprsParser {
 
       latDigits[i] = digit;
       if (i < 3 && msgBit) {
-        if (c >= 0x41 && c <= 0x4A) {      // A-J → Custom message bit
+        if (c >= 0x41 && c <= 0x4A) {
+          // A-J → Custom message bit
           custBits |= (1 << (2 - i));
-        } else if (c >= 0x50 && c <= 0x59) { // P-Y → Standard message bit
+        } else if (c >= 0x50 && c <= 0x59) {
+          // P-Y → Standard message bit
           stdBits |= (1 << (2 - i));
         }
       }
@@ -1182,11 +1184,15 @@ class AprsParser {
       final isBacktick = comment.codeUnitAt(0) == 0x60;
       final hexCount = isBacktick ? 4 : 10;
       if (comment.length > hexCount &&
-          comment.substring(1, hexCount + 1).split('').every(
-            (c) => (c.codeUnitAt(0) >= 0x30 && c.codeUnitAt(0) <= 0x39) ||
-                   (c.codeUnitAt(0) >= 0x41 && c.codeUnitAt(0) <= 0x46) ||
-                   (c.codeUnitAt(0) >= 0x61 && c.codeUnitAt(0) <= 0x66),
-          )) {
+          comment
+              .substring(1, hexCount + 1)
+              .split('')
+              .every(
+                (c) =>
+                    (c.codeUnitAt(0) >= 0x30 && c.codeUnitAt(0) <= 0x39) ||
+                    (c.codeUnitAt(0) >= 0x41 && c.codeUnitAt(0) <= 0x46) ||
+                    (c.codeUnitAt(0) >= 0x61 && c.codeUnitAt(0) <= 0x66),
+              )) {
         // Valid telemetry block — strip flag + hex digits.
         comment = comment.substring(hexCount + 1);
       } else {
@@ -1208,13 +1214,17 @@ class AprsParser {
       final c2 = comment.codeUnitAt(1);
       final c3 = comment.codeUnitAt(2);
       final c4 = comment.codeUnitAt(3);
-      if (c1 >= 0x21 && c1 <= 0x7B &&
-          c2 >= 0x21 && c2 <= 0x7B &&
-          c3 >= 0x21 && c3 <= 0x7B &&
-          c4 == 0x7D) {  // 0x7D = '}'
-        micEAltitude = ((c1 - 33) * 91 * 91 +
-                        (c2 - 33) * 91 +
-                        (c3 - 33) - 10000).toDouble();
+      if (c1 >= 0x21 &&
+          c1 <= 0x7B &&
+          c2 >= 0x21 &&
+          c2 <= 0x7B &&
+          c3 >= 0x21 &&
+          c3 <= 0x7B &&
+          c4 == 0x7D) {
+        // 0x7D = '}'
+        micEAltitude =
+            ((c1 - 33) * 91 * 91 + (c2 - 33) * 91 + (c3 - 33) - 10000)
+                .toDouble();
         comment = comment.substring(4);
       }
     }

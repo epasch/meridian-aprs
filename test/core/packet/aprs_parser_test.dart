@@ -8,11 +8,7 @@ import 'package:test/test.dart';
 // AX.25 frame builder (mirrors the helper in ax25_parser_test.dart)
 // ---------------------------------------------------------------------------
 
-List<int> _encodeAddr(
-  String callsign,
-  int ssid, {
-  bool last = false,
-}) {
+List<int> _encodeAddr(String callsign, int ssid, {bool last = false}) {
   final bytes = List<int>.filled(7, 0);
   final padded = callsign.padRight(6);
   for (int i = 0; i < 6; i++) {
@@ -776,81 +772,94 @@ void main() {
     // Yaesu proprietary prefix: '"' + 2 data bytes + '}' (terminator).
     // Strip everything up to and including '}', then suffix _0 →
     // comment should be 'comment', device 'Yaesu FT3D series'.
-    test('strips Yaesu 0x22 prefix (}-terminated) and detects _0 device suffix', () {
-      // Build raw line: 9-byte info prefix + '"4G}' (Yaesu block) + 'comment_0'
-      final rawLine =
-          'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x224G}comment_0';
-      final packet = parser.parse(rawLine);
-      expect(packet, isA<MicEPacket>());
-      if (packet is MicEPacket) {
-        expect(packet.comment, equals('comment'));
-        expect(packet.device, equals('Yaesu FT3D series'));
-      }
-    });
+    test(
+      'strips Yaesu 0x22 prefix (}-terminated) and detects _0 device suffix',
+      () {
+        // Build raw line: 9-byte info prefix + '"4G}' (Yaesu block) + 'comment_0'
+        final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x224G}comment_0';
+        final packet = parser.parse(rawLine);
+        expect(packet, isA<MicEPacket>());
+        if (packet is MicEPacket) {
+          expect(packet.comment, equals('comment'));
+          expect(packet.device, equals('Yaesu FT3D series'));
+        }
+      },
+    );
 
     // Backtick 2-channel telemetry: flag + exactly 4 hex digits → strip 5 bytes.
     // Per APRS 1.0.1 ch.10: 2 channels × 2 hex digits = "a1b2" here.
-    test('strips backtick 2-channel telemetry (4 hex digits) and detects ] suffix', () {
-      // comment field: \x60 + "a1b2" (valid hex) + "comment]"
-      final rawLine =
-          'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x60a1b2comment]';
-      final packet = parser.parse(rawLine);
-      expect(packet, isA<MicEPacket>());
-      if (packet is MicEPacket) {
-        expect(packet.comment, equals('comment'));
-        expect(packet.device, equals('Kenwood (TH-D7x/TM-D7x)'));
-      }
-    });
+    test(
+      'strips backtick 2-channel telemetry (4 hex digits) and detects ] suffix',
+      () {
+        // comment field: \x60 + "a1b2" (valid hex) + "comment]"
+        final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x60a1b2comment]';
+        final packet = parser.parse(rawLine);
+        expect(packet, isA<MicEPacket>());
+        if (packet is MicEPacket) {
+          expect(packet.comment, equals('comment'));
+          expect(packet.device, equals('Kenwood (TH-D7x/TM-D7x)'));
+        }
+      },
+    );
 
     // Apostrophe 5-channel telemetry: flag + exactly 10 hex digits → strip 11 bytes.
     // Per APRS 1.0.1 ch.10: 5 channels × 2 hex digits = "a1b2c3d4e5" here.
     // Followed by ]" (Kenwood TM-D710 suffix).
-    test('strips apostrophe 5-channel telemetry (10 hex digits) and detects ]" suffix (TM-D710)', () {
-      final rawLine =
-          'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x27a1b2c3d4e5comment]\x22';
-      final packet = parser.parse(rawLine);
-      expect(packet, isA<MicEPacket>());
-      if (packet is MicEPacket) {
-        expect(packet.comment, equals('comment'));
-        expect(packet.device, equals('Kenwood TM-D710'));
-      }
-    });
+    test(
+      'strips apostrophe 5-channel telemetry (10 hex digits) and detects ]" suffix (TM-D710)',
+      () {
+        final rawLine =
+            'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x27a1b2c3d4e5comment]\x22';
+        final packet = parser.parse(rawLine);
+        expect(packet, isA<MicEPacket>());
+        if (packet is MicEPacket) {
+          expect(packet.comment, equals('comment'));
+          expect(packet.device, equals('Kenwood TM-D710'));
+        }
+      },
+    );
 
     // Apostrophe 5-channel telemetry + ]= suffix (Kenwood TH-D72A).
-    test('strips apostrophe 5-channel telemetry (10 hex digits) and detects ]= suffix', () {
-      final rawLine =
-          'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x27a1b2c3d4e5comment]=';
-      final packet = parser.parse(rawLine);
-      expect(packet, isA<MicEPacket>());
-      if (packet is MicEPacket) {
-        expect(packet.comment, equals('comment'));
-        expect(packet.device, equals('Kenwood TH-D72A'));
-      }
-    });
+    test(
+      'strips apostrophe 5-channel telemetry (10 hex digits) and detects ]= suffix',
+      () {
+        final rawLine =
+            'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x27a1b2c3d4e5comment]=';
+        final packet = parser.parse(rawLine);
+        expect(packet, isA<MicEPacket>());
+        if (packet is MicEPacket) {
+          expect(packet.comment, equals('comment'));
+          expect(packet.device, equals('Kenwood TH-D72A'));
+        }
+      },
+    );
 
     // Real-world Yaesu FT3D packet: "`"3x}_0"
     // Backtick followed by '"' (0x22) — not a hex digit → strip only 1 byte.
     // The altitude decoder then sees '"3x}' → 6 ft.  After altitude strip the
     // only remaining bytes are '_0' which the device resolver strips as
     // FT3D suffix → empty comment, device 'Yaesu FT3D series', altitude ≈ 6 ft.
-    test('backtick + Yaesu altitude block: `"3x}_0 yields empty comment and altitude', () {
-      // Exact comment bytes from: KM4TJO-7>S6TU8R,...:`h&Vl!b[/`"3x}_0
-      // We use the same format but with the known-good SX5E0A destination.
-      // Comment field (after 9-byte position block): \x60\x22\x33\x78\x7D\x5F\x30
-      // = backtick + '"' + '3' + 'x' + '}' + '_' + '0'
-      final rawLine =
-          'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x60\x22\x33\x78\x7D\x5F\x30';
-      final packet = parser.parse(rawLine);
-      expect(packet, isA<MicEPacket>());
-      if (packet is MicEPacket) {
-        expect(packet.comment, equals(''));
-        expect(packet.device, equals('Yaesu FT3D series'));
-        // altitude = (0x22-33)*91^2 + (0x33-33)*91 + (0x78-33) - 10000
-        //          = (1)*8281 + (18)*91 + (87) - 10000
-        //          = 8281 + 1638 + 87 - 10000 = 6
-        expect(packet.altitude, closeTo(6.0, 1.0));
-      }
-    });
+    test(
+      'backtick + Yaesu altitude block: `"3x}_0 yields empty comment and altitude',
+      () {
+        // Exact comment bytes from: KM4TJO-7>S6TU8R,...:`h&Vl!b[/`"3x}_0
+        // We use the same format but with the known-good SX5E0A destination.
+        // Comment field (after 9-byte position block): \x60\x22\x33\x78\x7D\x5F\x30
+        // = backtick + '"' + '3' + 'x' + '}' + '_' + '0'
+        final rawLine =
+            'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x60\x22\x33\x78\x7D\x5F\x30';
+        final packet = parser.parse(rawLine);
+        expect(packet, isA<MicEPacket>());
+        if (packet is MicEPacket) {
+          expect(packet.comment, equals(''));
+          expect(packet.device, equals('Yaesu FT3D series'));
+          // altitude = (0x22-33)*91^2 + (0x33-33)*91 + (0x78-33) - 10000
+          //          = (1)*8281 + (18)*91 + (87) - 10000
+          //          = 8281 + 1638 + 87 - 10000 = 6
+          expect(packet.altitude, closeTo(6.0, 1.0));
+        }
+      },
+    );
 
     // Real-world Yaesu FT3D with user text in the comment: the radio uses
     // backtick (symbol table = ` at byte 8) + backtick comment prefix (byte 9)
@@ -864,22 +873,24 @@ void main() {
     // "Er" are NOT hex digits, so backtick is a 1-byte device-type prefix.
     // Strip 1 byte → "Eric's FT3DR_0 " → trim → "Eric's FT3DR_0".
     // _\d$ matches → strip "_0" → "Eric's FT3DR"; device = Yaesu FT3D series.
-    test('backtick + non-hex text + _0 suffix + trailing space: full comment preserved', () {
-      final rawLine =
-          "N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x60Eric's FT3DR_0 ";
-      final packet = parser.parse(rawLine);
-      expect(packet, isA<MicEPacket>());
-      if (packet is MicEPacket) {
-        expect(packet.comment, equals("Eric's FT3DR"));
-        expect(packet.device, equals('Yaesu FT3D series'));
-      }
-    });
+    test(
+      'backtick + non-hex text + _0 suffix + trailing space: full comment preserved',
+      () {
+        final rawLine =
+            "N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x60Eric's FT3DR_0 ";
+        final packet = parser.parse(rawLine);
+        expect(packet, isA<MicEPacket>());
+        if (packet is MicEPacket) {
+          expect(packet.comment, equals("Eric's FT3DR"));
+          expect(packet.device, equals('Yaesu FT3D series'));
+        }
+      },
+    );
 
     // Actual 2-channel telemetry: backtick + 4 hex digits + remaining comment.
     // "a1b2" are valid hex → strip flag + 4 hex = 5 bytes.
     test('backtick + 4 hex digits = telemetry stripped, remainder kept', () {
-      final rawLine =
-          'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x60a1b2rest]';
+      final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/\x60a1b2rest]';
       final packet = parser.parse(rawLine);
       expect(packet, isA<MicEPacket>());
       if (packet is MicEPacket) {
@@ -889,8 +900,7 @@ void main() {
     });
 
     test('comment with no prefix and no suffix is unchanged', () {
-      final rawLine =
-          'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/plain comment';
+      final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/plain comment';
       final packet = parser.parse(rawLine);
       expect(packet, isA<MicEPacket>());
       if (packet is MicEPacket) {
@@ -926,10 +936,7 @@ void main() {
       );
       final packet = parser.parseFrame(frame);
       expect(packet, isA<MicEPacket>());
-      expect(
-        (packet as MicEPacket).lon,
-        inInclusiveRange(-180.0, 180.0),
-      );
+      expect((packet as MicEPacket).lon, inInclusiveRange(-180.0, 180.0));
     });
 
     test('parseFrame and parse produce consistent lat/lon for latin1 0xB7', () {
@@ -989,10 +996,7 @@ void main() {
       );
       final packet = parser.parseFrame(frame);
       expect(packet, isA<UnknownPacket>());
-      expect(
-        (packet as UnknownPacket).reason,
-        contains('Not a UI/APRS frame'),
-      );
+      expect((packet as UnknownPacket).reason, contains('Not a UI/APRS frame'));
     });
 
     test('non-APRS PID (0xCF) returns UnknownPacket', () {
@@ -1006,10 +1010,7 @@ void main() {
       );
       final packet = parser.parseFrame(frame);
       expect(packet, isA<UnknownPacket>());
-      expect(
-        (packet as UnknownPacket).reason,
-        contains('Not a UI/APRS frame'),
-      );
+      expect((packet as UnknownPacket).reason, contains('Not a UI/APRS frame'));
     });
   });
 
@@ -1141,17 +1142,19 @@ void main() {
     //   c1=0 → char 33='!', c2=90 → char 123='{', c3=90 → char 123='{', c4='}'
     //   Verify: (0)*8281 + (90)*91 + (90) - 10000 = 0+8190+90-10000 = -1720
     //   c1 is '!' (0x21), not '"' (0x22), so Yaesu stripper is not triggered.
-    test('base-91 altitude -1720 ft (below sea level) decoded from comment', () {
-      // info comment bytes: '!' '{' '{' '}' = 0x21 0x7B 0x7B 0x7D
-      final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/!\x7B\x7B\x7D';
-      final packet = parser.parse(rawLine);
-      expect(packet, isA<MicEPacket>());
-      expect((packet as MicEPacket).altitude, closeTo(-1720.0, 0.5));
-    });
+    test(
+      'base-91 altitude -1720 ft (below sea level) decoded from comment',
+      () {
+        // info comment bytes: '!' '{' '{' '}' = 0x21 0x7B 0x7B 0x7D
+        final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/!\x7B\x7B\x7D';
+        final packet = parser.parse(rawLine);
+        expect(packet, isA<MicEPacket>());
+        expect((packet as MicEPacket).altitude, closeTo(-1720.0, 0.5));
+      },
+    );
 
     test('comment with no altitude prefix leaves altitude null', () {
-      final rawLine =
-          'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/plain comment';
+      final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/plain comment';
       final packet = parser.parse(rawLine);
       expect(packet, isA<MicEPacket>());
       expect((packet as MicEPacket).altitude, isNull);

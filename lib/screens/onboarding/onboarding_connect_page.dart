@@ -62,13 +62,11 @@ class _OnboardingConnectPageState extends State<OnboardingConnectPage> {
               selectedIndex: _selectedOption,
               icon: Symbols.bluetooth,
               title: 'BLE TNC',
-              subtitle:
-                  (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
+              subtitle: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                   ? 'Connect wirelessly to a Mobilinkd or compatible TNC.'
                   : 'Available on iOS and Android.',
               dimmed: kIsWeb || !(Platform.isAndroid || Platform.isIOS),
-              onTap:
-                  (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
+              onTap: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                   ? () => setState(() => _selectedOption = 1)
                   : null,
             ),

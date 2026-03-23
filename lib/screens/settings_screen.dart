@@ -521,8 +521,7 @@ class _TncSectionState extends State<_TncSection> {
       _selectedPort = null;
     }
 
-    final isBlePlatform =
-        !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    final isBlePlatform = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -530,8 +529,7 @@ class _TncSectionState extends State<_TncSection> {
         const _SectionHeader('TNC'),
 
         // ── BLE TNC card (mobile only) ──────────────────────────────────────
-        if (isBlePlatform)
-          _BleTncCard(tncService: tncService),
+        if (isBlePlatform) _BleTncCard(tncService: tncService),
 
         // ── USB serial TNC card ─────────────────────────────────────────────
         Card(
@@ -766,7 +764,8 @@ class _BleTncCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isBleConnected = tncService.currentStatus == ConnectionStatus.connected &&
+    final isBleConnected =
+        tncService.currentStatus == ConnectionStatus.connected &&
         tncService.activeTransportType == TransportType.ble;
 
     return Card(
@@ -839,9 +838,8 @@ class _BleTncCard extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => MeridianBottomSheet(
-        child: BleScannerSheet(tncService: tncService),
-      ),
+      builder: (_) =>
+          MeridianBottomSheet(child: BleScannerSheet(tncService: tncService)),
     );
   }
 }

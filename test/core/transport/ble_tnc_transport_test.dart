@@ -70,7 +70,10 @@ class FakeBleDeviceAdapter implements BleDeviceAdapter {
   int get mtu => fakeMtu;
 
   @override
-  Future<void> connect({int? mtu, Duration timeout = const Duration(seconds: 15)}) async {
+  Future<void> connect({
+    int? mtu,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
     connectCallCount++;
     if (connectThrows) throw Exception('FakeBleDeviceAdapter: connect failed');
   }
@@ -90,7 +93,8 @@ class FakeBleDeviceAdapter implements BleDeviceAdapter {
   @override
   Future<List<BluetoothService>> discoverServices() async {
     discoverCallCount++;
-    if (discoverThrows) throw Exception('FakeBleDeviceAdapter: discoverServices failed');
+    if (discoverThrows)
+      throw Exception('FakeBleDeviceAdapter: discoverServices failed');
     return services;
   }
 
@@ -139,19 +143,22 @@ void main() {
     });
 
     // 2 -----------------------------------------------------------------------
-    test('connect() emits connecting status then transitions to error when no matching service', () async {
-      // fakeAdapter.services is empty → service UUID not found → error.
-      final capturedStates = <ConnectionStatus>[];
-      final sub = transport.connectionState.listen(capturedStates.add);
+    test(
+      'connect() emits connecting status then transitions to error when no matching service',
+      () async {
+        // fakeAdapter.services is empty → service UUID not found → error.
+        final capturedStates = <ConnectionStatus>[];
+        final sub = transport.connectionState.listen(capturedStates.add);
 
-      await expectLater(transport.connect(), throwsA(isA<Exception>()));
+        await expectLater(transport.connect(), throwsA(isA<Exception>()));
 
-      await sub.cancel();
+        await sub.cancel();
 
-      expect(capturedStates, containsAll([ConnectionStatus.connecting]));
-      // After the exception the status must be error.
-      expect(transport.currentStatus, ConnectionStatus.error);
-    });
+        expect(capturedStates, containsAll([ConnectionStatus.connecting]));
+        // After the exception the status must be error.
+        expect(transport.currentStatus, ConnectionStatus.error);
+      },
+    );
 
     // 3 -----------------------------------------------------------------------
     test('connect() calls device connect and discoverServices', () async {
@@ -162,32 +169,38 @@ void main() {
     });
 
     // 4 -----------------------------------------------------------------------
-    test('connect() transitions to error when adapter.connect() throws', () async {
-      fakeAdapter.connectThrows = true;
+    test(
+      'connect() transitions to error when adapter.connect() throws',
+      () async {
+        fakeAdapter.connectThrows = true;
 
-      final capturedStates = <ConnectionStatus>[];
-      final sub = transport.connectionState.listen(capturedStates.add);
+        final capturedStates = <ConnectionStatus>[];
+        final sub = transport.connectionState.listen(capturedStates.add);
 
-      await expectLater(transport.connect(), throwsA(isA<Exception>()));
+        await expectLater(transport.connect(), throwsA(isA<Exception>()));
 
-      await sub.cancel();
+        await sub.cancel();
 
-      expect(transport.currentStatus, ConnectionStatus.error);
-      // disconnect() should have been called during cleanup.
-      expect(fakeAdapter.disconnectCallCount, 1);
-    });
+        expect(transport.currentStatus, ConnectionStatus.error);
+        // disconnect() should have been called during cleanup.
+        expect(fakeAdapter.disconnectCallCount, 1);
+      },
+    );
 
     // 5 -----------------------------------------------------------------------
-    test('connect() retries discoverServices up to 3 times when it throws', () async {
-      fakeAdapter.discoverThrows = true;
+    test(
+      'connect() retries discoverServices up to 3 times when it throws',
+      () async {
+        fakeAdapter.discoverThrows = true;
 
-      // connect() → adapter.connect succeeds → discoverServices throws × 3 → rethrows.
-      await expectLater(transport.connect(), throwsA(isA<Exception>()));
+        // connect() → adapter.connect succeeds → discoverServices throws × 3 → rethrows.
+        await expectLater(transport.connect(), throwsA(isA<Exception>()));
 
-      // The implementation retries up to 3× before rethrowing.
-      expect(fakeAdapter.discoverCallCount, 3);
-      expect(transport.currentStatus, ConnectionStatus.error);
-    });
+        // The implementation retries up to 3× before rethrowing.
+        expect(fakeAdapter.discoverCallCount, 3);
+        expect(transport.currentStatus, ConnectionStatus.error);
+      },
+    );
 
     // 6 -----------------------------------------------------------------------
     test('disconnect() on disconnected transport is a no-op', () async {
@@ -222,10 +235,7 @@ void main() {
     // 8 -----------------------------------------------------------------------
     test('sendFrame throws StateError when not connected', () async {
       final ax25 = Uint8List.fromList([0x01, 0x02, 0x03]);
-      expect(
-        () async => transport.sendFrame(ax25),
-        throwsA(isA<StateError>()),
-      );
+      expect(() async => transport.sendFrame(ax25), throwsA(isA<StateError>()));
     });
 
     // 9 -----------------------------------------------------------------------
@@ -245,7 +255,11 @@ void main() {
       });
 
       test('reassembles a frame delivered in two BLE chunks', () async {
-        final kissBytes = _buildKissFrame('W1AW', 'APRS', '!4903.50N/07201.75W-BLE');
+        final kissBytes = _buildKissFrame(
+          'W1AW',
+          'APRS',
+          '!4903.50N/07201.75W-BLE',
+        );
         // Split the frame into two chunks as BLE might deliver them.
         final mid = kissBytes.length ~/ 2;
         final chunk1 = kissBytes.sublist(0, mid);
@@ -266,7 +280,11 @@ void main() {
       });
 
       test('reassembles a frame delivered one byte at a time', () async {
-        final kissBytes = _buildKissFrame('KD9TST', 'APRS', '>Testing BLE chunks');
+        final kissBytes = _buildKissFrame(
+          'KD9TST',
+          'APRS',
+          '>Testing BLE chunks',
+        );
         final frames = <Uint8List>[];
         final sub = framer.frames.listen(frames.add);
 
@@ -337,7 +355,9 @@ void main() {
         }
 
         // All chunks together must reconstruct the original KISS frame.
-        final reassembled = Uint8List.fromList(chunks.expand((c) => c).toList());
+        final reassembled = Uint8List.fromList(
+          chunks.expand((c) => c).toList(),
+        );
         expect(reassembled, equals(kissFrame));
         // No chunk exceeds MTU.
         for (final chunk in chunks) {

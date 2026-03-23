@@ -36,8 +36,10 @@ class DefaultBleDeviceAdapter implements BleDeviceAdapter {
   final BluetoothDevice _device;
 
   @override
-  Future<void> connect({int? mtu, Duration timeout = const Duration(seconds: 15)}) =>
-      _device.connect(mtu: mtu, timeout: timeout, autoConnect: false);
+  Future<void> connect({
+    int? mtu,
+    Duration timeout = const Duration(seconds: 15),
+  }) => _device.connect(mtu: mtu, timeout: timeout, autoConnect: false);
 
   @override
   Future<void> disconnect() => _device.disconnect();
@@ -49,10 +51,12 @@ class DefaultBleDeviceAdapter implements BleDeviceAdapter {
   int get mtu => _device.mtuNow;
 
   @override
-  Future<List<BluetoothService>> discoverServices() => _device.discoverServices();
+  Future<List<BluetoothService>> discoverServices() =>
+      _device.discoverServices();
 
   @override
-  Stream<BluetoothConnectionState> get connectionState => _device.connectionState;
+  Stream<BluetoothConnectionState> get connectionState =>
+      _device.connectionState;
 
   @override
   String get platformName => _device.platformName;
@@ -82,10 +86,10 @@ class BleTncTransport implements KissTncTransport {
     String serviceUuid = kMobilinkdServiceUuid,
     String txCharUuid = kMobilinkdTxCharUuid,
     String rxCharUuid = kMobilinkdRxCharUuid,
-  })  : _adapter = adapter ?? DefaultBleDeviceAdapter(device),
-        _serviceUuid = serviceUuid,
-        _txCharUuid = txCharUuid,
-        _rxCharUuid = rxCharUuid;
+  }) : _adapter = adapter ?? DefaultBleDeviceAdapter(device),
+       _serviceUuid = serviceUuid,
+       _txCharUuid = txCharUuid,
+       _rxCharUuid = rxCharUuid;
 
   final BleDeviceAdapter _adapter;
   final String _serviceUuid;
@@ -135,9 +139,13 @@ class BleTncTransport implements KissTncTransport {
         final negotiated = await _adapter.requestMtu(512);
         // ATT overhead is 3 bytes; subtract to get usable payload bytes.
         _mtu = max(20, negotiated - 3);
-        debugPrint('BleTncTransport: MTU negotiated $negotiated, using $_mtu byte chunks');
+        debugPrint(
+          'BleTncTransport: MTU negotiated $negotiated, using $_mtu byte chunks',
+        );
       } catch (e) {
-        debugPrint('BleTncTransport: MTU negotiation failed, using 20-byte fallback: $e');
+        debugPrint(
+          'BleTncTransport: MTU negotiation failed, using 20-byte fallback: $e',
+        );
         _mtu = 20;
       }
 
@@ -148,7 +156,9 @@ class BleTncTransport implements KissTncTransport {
           services = await _adapter.discoverServices();
           break;
         } catch (e) {
-          debugPrint('BleTncTransport: discoverServices attempt $attempt failed: $e');
+          debugPrint(
+            'BleTncTransport: discoverServices attempt $attempt failed: $e',
+          );
           if (attempt == 3) rethrow;
           await Future<void>.delayed(const Duration(milliseconds: 500));
         }
@@ -156,7 +166,9 @@ class BleTncTransport implements KissTncTransport {
 
       // 4. Find the TNC GATT service.
       final targetServiceGuid = Guid(_serviceUuid);
-      final service = services!.where((s) => s.serviceUuid == targetServiceGuid).firstOrNull;
+      final service = services!
+          .where((s) => s.serviceUuid == targetServiceGuid)
+          .firstOrNull;
       if (service == null) {
         throw Exception(
           'BleTncTransport: service $_serviceUuid not found on ${_adapter.platformName}. '
@@ -167,8 +179,12 @@ class BleTncTransport implements KissTncTransport {
       // 5. Find TX (notify) and RX (write) characteristics.
       final txGuid = Guid(_txCharUuid);
       final rxGuid = Guid(_rxCharUuid);
-      _txChar = service.characteristics.where((c) => c.characteristicUuid == txGuid).firstOrNull;
-      _rxChar = service.characteristics.where((c) => c.characteristicUuid == rxGuid).firstOrNull;
+      _txChar = service.characteristics
+          .where((c) => c.characteristicUuid == txGuid)
+          .firstOrNull;
+      _rxChar = service.characteristics
+          .where((c) => c.characteristicUuid == rxGuid)
+          .firstOrNull;
 
       if (_txChar == null || _rxChar == null) {
         throw Exception(
@@ -244,7 +260,9 @@ class BleTncTransport implements KissTncTransport {
   void _onBleConnectionState(BluetoothConnectionState state) {
     if (state == BluetoothConnectionState.disconnected &&
         _status == ConnectionStatus.connected) {
-      debugPrint('BleTncTransport: unexpected disconnect from ${_adapter.platformName}');
+      debugPrint(
+        'BleTncTransport: unexpected disconnect from ${_adapter.platformName}',
+      );
       _status = ConnectionStatus.error;
       _stateController.add(ConnectionStatus.error);
       _cleanupSubscriptions();
