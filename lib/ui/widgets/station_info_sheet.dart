@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/packet/station.dart';
 import '../../core/packet/symbol_resolver.dart';
+import '../../screens/message_thread_screen.dart';
 import 'aprs_symbol_widget.dart';
 
 String _formatLastHeard(DateTime lastHeard) {
@@ -139,6 +141,28 @@ class StationInfoSheet extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Message button
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                icon: const Icon(Symbols.message),
+                label: Text('Message ${station.callsign}'),
+                onPressed: () {
+                  final nav = Navigator.of(context);
+                  nav.pop();
+                  nav.push(
+                    MaterialPageRoute<void>(
+                      // TODO(ios): CupertinoPageRoute
+                      builder: (_) =>
+                          MessageThreadScreen(peerCallsign: station.callsign),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),

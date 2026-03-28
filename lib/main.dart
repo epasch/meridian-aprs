@@ -72,6 +72,7 @@ Future<void> main() async {
   await beaconingService.loadPersistedSettings();
 
   final messageService = MessageService(stationSettings, txService, service);
+  await messageService.loadHistory();
 
   runApp(
     MultiProvider(

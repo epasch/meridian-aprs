@@ -10,6 +10,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -72,7 +73,13 @@ class MessageService extends ChangeNotifier {
   final TxService _tx;
 
   static const _keyCounter = 'message_id_counter';
+  static const _keyPeers = 'msg_peers';
   static const _retryDelays = [30, 60, 120, 240, 480]; // seconds (APRS spec)
+
+  /// Maximum messages retained per conversation (oldest pruned first).
+  static const _maxMessagesPerConv = 200;
+
+  static String _convKey(String peer) => 'msg_conv_$peer';
 
   // Active conversations keyed by peer callsign (uppercase, no padding).
   final _conversations = <String, Conversation>{};
@@ -109,6 +116,31 @@ class MessageService extends ChangeNotifier {
   // Public mutators
   // ---------------------------------------------------------------------------
 
+  /// Restore persisted conversations from [SharedPreferences].
+  ///
+  /// Call once after construction (before [runApp]). Messages that were
+  /// [MessageStatus.pending] or [MessageStatus.retrying] when the app was last
+  /// closed are demoted to [MessageStatus.failed] — their retry timers cannot
+  /// be resumed, but the user can trigger [resendMessage] manually.
+  Future<void> loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final peersRaw = prefs.getString(_keyPeers);
+    if (peersRaw == null) return;
+
+    final peers = (jsonDecode(peersRaw) as List<dynamic>).cast<String>();
+    for (final peer in peers) {
+      final convRaw = prefs.getString(_convKey(peer));
+      if (convRaw == null) continue;
+      try {
+        final conv = _convFromJson(jsonDecode(convRaw) as Map<String, dynamic>);
+        _conversations[peer] = conv;
+      } catch (e) {
+        debugPrint('MessageService: failed to load conversation $peer: $e');
+      }
+    }
+    notifyListeners();
+  }
+
   /// Send a message to [toCallsign].
   ///
   /// Creates a conversation if one doesn't exist. Starts the retry scheduler.
@@ -133,6 +165,7 @@ class MessageService extends ChangeNotifier {
     await _transmitMessage(peer, text, wireId);
     _scheduleRetry(entry, peer, attempt: 0);
     notifyListeners();
+    await _persist();
   }
 
   /// Cancel a pending or retrying outgoing message.
@@ -155,6 +188,7 @@ class MessageService extends ChangeNotifier {
       }
     }
     notifyListeners();
+    _persist(); // ignore: unawaited_futures
   }
 
   /// Re-send a message that has reached [MessageStatus.failed].
@@ -174,6 +208,7 @@ class MessageService extends ChangeNotifier {
           await _transmitMessage(peer, entry.text, entry.wireId!);
         }
         _scheduleRetry(entry, peer, attempt: 0);
+        await _persist();
         break;
       }
     }
@@ -186,6 +221,7 @@ class MessageService extends ChangeNotifier {
     if (conv.unreadCount == 0) return;
     conv.unreadCount = 0;
     notifyListeners();
+    _persist(); // ignore: unawaited_futures
   }
 
   @override
@@ -254,10 +290,11 @@ class MessageService extends ChangeNotifier {
 
     // Send ACK immediately.
     if (wireId != null && wireId.isNotEmpty) {
-      _transmitAck(source, wireId);
+      _transmitAck(source, wireId); // ignore: unawaited_futures
     }
 
     notifyListeners();
+    _persist(); // ignore: unawaited_futures
   }
 
   void _handleAck(String peer, String ackId) {
@@ -277,6 +314,7 @@ class MessageService extends ChangeNotifier {
       }
     }
     notifyListeners();
+    _persist(); // ignore: unawaited_futures
   }
 
   void _handleRej(String peer, String rejId) {
@@ -292,6 +330,7 @@ class MessageService extends ChangeNotifier {
       }
     }
     notifyListeners();
+    _persist(); // ignore: unawaited_futures
   }
 
   // ---------------------------------------------------------------------------
@@ -302,6 +341,7 @@ class MessageService extends ChangeNotifier {
     if (attempt >= _retryDelays.length) {
       entry.status = MessageStatus.failed;
       notifyListeners();
+      _persist(); // ignore: unawaited_futures
       return;
     }
 
@@ -362,6 +402,82 @@ class MessageService extends ChangeNotifier {
     return _conversations.putIfAbsent(
       peer,
       () => Conversation(peerCallsign: peer),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal — persistence
+  // ---------------------------------------------------------------------------
+
+  /// Persist all conversations to [SharedPreferences]. Fire-and-forget; callers
+  /// do not need to await this.
+  Future<void> _persist() async {
+    final prefs = await SharedPreferences.getInstance();
+    final peers = _conversations.keys.toList();
+    await prefs.setString(_keyPeers, jsonEncode(peers));
+    for (final entry in _conversations.entries) {
+      await prefs.setString(
+        _convKey(entry.key),
+        jsonEncode(_convToJson(entry.value)),
+      );
+    }
+  }
+
+  Map<String, dynamic> _convToJson(Conversation c) {
+    // Prune to the most recent _maxMessagesPerConv messages before serialising.
+    final msgs = c.messages.length > _maxMessagesPerConv
+        ? c.messages.sublist(c.messages.length - _maxMessagesPerConv)
+        : c.messages;
+    return {
+      'peer': c.peerCallsign,
+      'unreadCount': c.unreadCount,
+      'lastActivity': c.lastActivity.millisecondsSinceEpoch,
+      'messages': msgs.map(_entryToJson).toList(),
+    };
+  }
+
+  Conversation _convFromJson(Map<String, dynamic> json) {
+    final conv = Conversation(peerCallsign: json['peer'] as String);
+    conv.unreadCount = (json['unreadCount'] as int?) ?? 0;
+    conv.lastActivity = DateTime.fromMillisecondsSinceEpoch(
+      json['lastActivity'] as int,
+    );
+    final msgs = (json['messages'] as List<dynamic>?) ?? [];
+    for (final m in msgs) {
+      conv.messages.add(_entryFromJson(m as Map<String, dynamic>));
+    }
+    return conv;
+  }
+
+  Map<String, dynamic> _entryToJson(MessageEntry e) => {
+    'localId': e.localId,
+    'wireId': e.wireId,
+    'text': e.text,
+    'timestamp': e.timestamp.millisecondsSinceEpoch,
+    'isOutgoing': e.isOutgoing,
+    'status': e.status.name,
+    'retryCount': e.retryCount,
+  };
+
+  MessageEntry _entryFromJson(Map<String, dynamic> json) {
+    final statusName = (json['status'] as String?) ?? 'failed';
+    var status = MessageStatus.values.firstWhere(
+      (s) => s.name == statusName,
+      orElse: () => MessageStatus.failed,
+    );
+    // Timers can't be resumed after a restart — treat as failed so the user
+    // can explicitly resend if needed.
+    if (status == MessageStatus.pending || status == MessageStatus.retrying) {
+      status = MessageStatus.failed;
+    }
+    return MessageEntry(
+      localId: json['localId'] as String,
+      wireId: json['wireId'] as String?,
+      text: json['text'] as String,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int),
+      isOutgoing: (json['isOutgoing'] as bool?) ?? false,
+      status: status,
+      retryCount: (json['retryCount'] as int?) ?? 0,
     );
   }
 
