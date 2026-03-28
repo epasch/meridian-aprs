@@ -12,6 +12,7 @@ import '../core/transport/tnc_config.dart';
 import '../core/transport/tnc_preset.dart';
 import '../services/beaconing_service.dart';
 import 'location_picker_screen.dart';
+import '../services/message_service.dart';
 import '../services/station_service.dart';
 import '../services/station_settings_service.dart';
 import '../services/tnc_service.dart';
@@ -1556,58 +1557,70 @@ class _FieldLabel extends StatelessWidget {
 class _HistorySection extends StatelessWidget {
   const _HistorySection();
 
-  static const _packetOptions = [100, 250, 500, 1000, 2500];
-  static const _stationOptions = [100, 250, 500, 1000, 5000];
+  // Day options: 0 is the sentinel for "forever".
+  static const _dayOptions = [7, 14, 30, 90, 180, 365, 0];
+
+  static String _label(int days) => days == 0 ? 'Forever' : '$days days';
+
+  /// Snap [value] to the nearest option (handles defaults that may not be
+  /// in the list, e.g. after an app update changes defaults).
+  static int _snap(int value) => _dayOptions.reduce(
+    (a, b) => (a - value).abs() <= (b - value).abs() ? a : b,
+  );
+
+  Widget _dayDropdown({
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
+    return DropdownButton<int>(
+      value: _snap(value),
+      underline: const SizedBox.shrink(),
+      items: _dayOptions
+          .map((d) => DropdownMenuItem(value: d, child: Text(_label(d))))
+          .toList(),
+      onChanged: (d) {
+        if (d != null) onChanged(d);
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final svc = context.watch<StationService>();
-
-    // Clamp the stored value to the nearest option in case the default
-    // changed between versions.
-    int nearest(int value, List<int> options) {
-      return options.reduce(
-        (a, b) => (a - value).abs() <= (b - value).abs() ? a : b,
-      );
-    }
-
-    final packetValue = nearest(svc.maxPackets, _packetOptions);
-    final stationValue = nearest(svc.maxStations, _stationOptions);
+    final stations = context.watch<StationService>();
+    final messages = context.watch<MessageService>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader('History'),
 
-        // Packet log limit
+        // Packet log retention
         ListTile(
-          title: const Text('Packet log limit'),
-          subtitle: const Text('Max packets retained in the log and on disk.'),
-          trailing: DropdownButton<int>(
-            value: packetValue,
-            underline: const SizedBox.shrink(),
-            items: _packetOptions
-                .map((n) => DropdownMenuItem(value: n, child: Text('$n')))
-                .toList(),
-            onChanged: (n) {
-              if (n != null) svc.setMaxPackets(n);
-            },
+          title: const Text('Packet log'),
+          subtitle: const Text('How long to keep received packets.'),
+          trailing: _dayDropdown(
+            value: stations.packetHistoryDays,
+            onChanged: stations.setPacketHistoryDays,
           ),
         ),
 
-        // Station history limit
+        // Station history retention
         ListTile(
-          title: const Text('Station history limit'),
-          subtitle: const Text('Max stations retained in memory and on disk.'),
-          trailing: DropdownButton<int>(
-            value: stationValue,
-            underline: const SizedBox.shrink(),
-            items: _stationOptions
-                .map((n) => DropdownMenuItem(value: n, child: Text('$n')))
-                .toList(),
-            onChanged: (n) {
-              if (n != null) svc.setMaxStations(n);
-            },
+          title: const Text('Station history'),
+          subtitle: const Text('How long to remember heard stations.'),
+          trailing: _dayDropdown(
+            value: stations.stationHistoryDays,
+            onChanged: stations.setStationHistoryDays,
+          ),
+        ),
+
+        // Message history retention
+        ListTile(
+          title: const Text('Message history'),
+          subtitle: const Text('How long to keep sent and received messages.'),
+          trailing: _dayDropdown(
+            value: messages.messageHistoryDays,
+            onChanged: messages.setMessageHistoryDays,
           ),
         ),
 

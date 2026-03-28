@@ -17,21 +17,27 @@ import '../core/transport/aprs_transport.dart'
 ///   - [stationUpdates] — a snapshot of the station map, updated each time a
 ///     position packet is received (backward-compatible with v0.1 UI)
 ///
-/// [recentPackets] holds a rolling buffer of the most recently received
-/// packets (configurable via [maxPackets], persisted in SharedPreferences),
-/// newest-first.
+/// [recentPackets] holds a rolling buffer of recent packets. The in-session
+/// buffer is capped at [_kMaxInMemoryPackets] for performance; time-based
+/// pruning ([packetHistoryDays] / [stationHistoryDays]) is applied at load
+/// and persist boundaries.
 ///
 /// History is persisted across app restarts. Call [loadPersistedHistory] once
 /// after construction (before [start]) to restore the previous session.
 class StationService extends ChangeNotifier {
-  static const int _defaultMaxPackets = 500;
-  static const int _defaultMaxStations = 1000;
+  // Hard in-session cap — not user-configurable. Keeps RAM bounded during
+  // long APRS-IS sessions on busy frequencies. Time-based pruning reduces
+  // this further at the persistence boundary.
+  static const int _kMaxInMemoryPackets = 5000;
 
   // SharedPreferences keys.
-  static const _keyMaxPackets = 'history_max_packets';
-  static const _keyMaxStations = 'history_max_stations';
+  static const _keyPacketDays = 'history_packet_days';
+  static const _keyStationDays = 'history_station_days';
   static const _keyPacketLog = 'packet_log_v1';
   static const _keyStationHistory = 'station_history_v1';
+
+  /// Sentinel value meaning "keep forever" (no age-based pruning).
+  static const int forever = 0;
 
   final AprsTransport _transport;
   final _parser = AprsParser();
@@ -46,9 +52,9 @@ class StationService extends ChangeNotifier {
   // Rolling packet buffer (newest at index 0).
   final _recentPackets = <AprsPacket>[];
 
-  // History settings.
-  int _maxPackets = _defaultMaxPackets;
-  int _maxStations = _defaultMaxStations;
+  // History age limits (days; 0 = forever).
+  int _packetHistoryDays = 30;
+  int _stationHistoryDays = 90;
 
   // Persistence state.
   SharedPreferences? _prefs;
@@ -79,19 +85,17 @@ class StationService extends ChangeNotifier {
   /// Returns the transport's current [ConnectionStatus] synchronously.
   ConnectionStatus get currentConnectionStatus => _transport.currentStatus;
 
-  /// Maximum number of packets retained in [recentPackets] and persisted.
-  int get maxPackets => _maxPackets;
+  /// Max age of persisted packets in days. [forever] (0) means no age limit.
+  int get packetHistoryDays => _packetHistoryDays;
 
-  /// Maximum number of stations retained in the station map and persisted.
-  int get maxStations => _maxStations;
+  /// Max age of persisted stations in days. [forever] (0) means no age limit.
+  int get stationHistoryDays => _stationHistoryDays;
 
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
 
   Future<void> start() async {
-    // Wire up the line stream once — persists across reconnects.
-    // Errors are handled inside AprsIsTransport and do not propagate here.
     _transport.lines.listen(_handleLine);
     await connectAprsIs();
   }
@@ -136,27 +140,27 @@ class StationService extends ChangeNotifier {
   Future<void> loadPersistedHistory(SharedPreferences prefs) async {
     _prefs = prefs;
 
-    // Load configurable limits.
-    _maxPackets = prefs.getInt(_keyMaxPackets) ?? _defaultMaxPackets;
-    _maxStations = prefs.getInt(_keyMaxStations) ?? _defaultMaxStations;
+    _packetHistoryDays = prefs.getInt(_keyPacketDays) ?? 30;
+    _stationHistoryDays = prefs.getInt(_keyStationDays) ?? 90;
 
-    // Restore station map.
+    // Restore station map, skipping entries older than the configured limit.
     final stationsRaw = prefs.getString(_keyStationHistory);
     if (stationsRaw != null) {
       try {
         final list = jsonDecode(stationsRaw) as List<dynamic>;
         for (final item in list) {
           final s = _stationFromJson(item as Map<String, dynamic>);
-          _stations[s.callsign] = s;
+          if (_withinAge(s.lastHeard, _stationHistoryDays)) {
+            _stations[s.callsign] = s;
+          }
         }
       } catch (e) {
         debugPrint('StationService: failed to load station history: $e');
       }
-      // Broadcast restored stations to any listeners that subscribed early.
       _stationController.add(Map.unmodifiable(_stations));
     }
 
-    // Restore packet log.
+    // Restore packet log, skipping entries older than the configured limit.
     final packetsRaw = prefs.getString(_keyPacketLog);
     if (packetsRaw != null) {
       try {
@@ -168,7 +172,9 @@ class StationService extends ChangeNotifier {
               ? PacketSource.tnc
               : PacketSource.aprsIs;
           final packet = _parser.parse(raw, transportSource: src);
-          _recentPackets.add(packet);
+          if (_withinAge(packet.receivedAt, _packetHistoryDays)) {
+            _recentPackets.add(packet);
+          }
         }
       } catch (e) {
         debugPrint('StationService: failed to load packet log: $e');
@@ -176,27 +182,25 @@ class StationService extends ChangeNotifier {
     }
   }
 
-  /// Update the packet history limit. Trims the in-memory buffer immediately
-  /// and schedules a persist.
-  Future<void> setMaxPackets(int n) async {
-    if (_maxPackets == n) return;
-    _maxPackets = n;
-    _prefs?.setInt(_keyMaxPackets, n); // ignore: unawaited_futures
-    // Trim in-memory buffer.
-    if (_recentPackets.length > n) {
-      _recentPackets.removeRange(n, _recentPackets.length);
-    }
+  /// Update the packet history age limit in days ([forever] = no limit).
+  Future<void> setPacketHistoryDays(int days) async {
+    if (_packetHistoryDays == days) return;
+    _packetHistoryDays = days;
+    await _prefs?.setInt(_keyPacketDays, days);
+    // Prune in-memory buffer to the new limit immediately.
+    _recentPackets.removeWhere((p) => !_withinAge(p.receivedAt, days));
     notifyListeners();
     _schedulePersist();
   }
 
-  /// Update the station history limit. Prunes the oldest stations immediately
-  /// and schedules a persist.
-  Future<void> setMaxStations(int n) async {
-    if (_maxStations == n) return;
-    _maxStations = n;
-    _prefs?.setInt(_keyMaxStations, n); // ignore: unawaited_futures
-    _trimStations();
+  /// Update the station history age limit in days ([forever] = no limit).
+  Future<void> setStationHistoryDays(int days) async {
+    if (_stationHistoryDays == days) return;
+    _stationHistoryDays = days;
+    await _prefs?.setInt(_keyStationDays, days);
+    // Prune in-memory station map to the new limit immediately.
+    _stations.removeWhere((_, s) => !_withinAge(s.lastHeard, days));
+    _stationController.add(Map.unmodifiable(_stations));
     notifyListeners();
     _schedulePersist();
   }
@@ -223,32 +227,27 @@ class StationService extends ChangeNotifier {
   void _handleLine(String raw, {PacketSource source = PacketSource.aprsIs}) {
     debugPrint(raw);
 
-    // Skip server comment lines — not packets.
     if (raw.isEmpty || raw.startsWith('#')) return;
 
     final packet = _parser.parse(raw, transportSource: source);
 
-    // Add to rolling buffer.
+    // Add to rolling in-session buffer, capped for performance.
     _recentPackets.insert(0, packet);
-    if (_recentPackets.length > _maxPackets) {
-      _recentPackets.removeRange(_maxPackets, _recentPackets.length);
+    if (_recentPackets.length > _kMaxInMemoryPackets) {
+      _recentPackets.removeLast();
     }
 
-    // Emit on packet stream.
     _packetController.add(packet);
 
-    // If this is a position packet, also update the station map.
     if (packet is PositionPacket) {
       debugPrint('PARSED: ${packet.source} @ ${packet.lat}, ${packet.lon}');
       final station = _mergeStation(_stationFromPosition(packet));
       _stations[station.callsign] = station;
-      _trimStations();
       _stationController.add(Map.unmodifiable(_stations));
     } else if (packet is MicEPacket) {
       debugPrint('MIC-E: ${packet.source} @ ${packet.lat}, ${packet.lon}');
       final station = _mergeStation(_stationFromMicE(packet));
       _stations[station.callsign] = station;
-      _trimStations();
       _stationController.add(Map.unmodifiable(_stations));
     } else if (packet is UnknownPacket) {
       debugPrint('SKIP: ${packet.reason} -- $raw');
@@ -257,11 +256,6 @@ class StationService extends ChangeNotifier {
     _schedulePersist();
   }
 
-  /// Carry forward non-empty fields from the previous [Station] record for the
-  /// same callsign when the incoming station has empty values.
-  ///
-  /// Currently preserves: comment (never blank out a previously seen comment),
-  /// device (keep the last successfully identified device).
   Station _mergeStation(Station incoming) {
     final prev = _stations[incoming.callsign];
     if (prev == null) return incoming;
@@ -278,52 +272,41 @@ class StationService extends ChangeNotifier {
     );
   }
 
-  /// Convert a [PositionPacket] to a [Station] for the legacy station map.
-  Station _stationFromPosition(PositionPacket p) {
-    return Station(
-      callsign: p.source,
-      lat: p.lat,
-      lon: p.lon,
-      rawPacket: p.rawLine,
-      lastHeard: p.receivedAt,
-      symbolTable: p.symbolTable,
-      symbolCode: p.symbolCode,
-      comment: p.comment,
-      device: p.device,
-    );
-  }
+  Station _stationFromPosition(PositionPacket p) => Station(
+    callsign: p.source,
+    lat: p.lat,
+    lon: p.lon,
+    rawPacket: p.rawLine,
+    lastHeard: p.receivedAt,
+    symbolTable: p.symbolTable,
+    symbolCode: p.symbolCode,
+    comment: p.comment,
+    device: p.device,
+  );
 
-  /// Convert a [MicEPacket] to a [Station] for the station map.
-  Station _stationFromMicE(MicEPacket p) {
-    return Station(
-      callsign: p.source,
-      lat: p.lat,
-      lon: p.lon,
-      rawPacket: p.rawLine,
-      lastHeard: p.receivedAt,
-      symbolTable: p.symbolTable,
-      symbolCode: p.symbolCode,
-      comment: p.comment,
-      device: p.device,
-    );
-  }
-
-  /// Remove the oldest stations if the station map exceeds [_maxStations].
-  void _trimStations() {
-    if (_stations.length <= _maxStations) return;
-    final sorted = _stations.values.toList()
-      ..sort((a, b) => a.lastHeard.compareTo(b.lastHeard)); // oldest first
-    final excess = _stations.length - _maxStations;
-    for (var i = 0; i < excess; i++) {
-      _stations.remove(sorted[i].callsign);
-    }
-  }
+  Station _stationFromMicE(MicEPacket p) => Station(
+    callsign: p.source,
+    lat: p.lat,
+    lon: p.lon,
+    rawPacket: p.rawLine,
+    lastHeard: p.receivedAt,
+    symbolTable: p.symbolTable,
+    symbolCode: p.symbolCode,
+    comment: p.comment,
+    device: p.device,
+  );
 
   // ---------------------------------------------------------------------------
   // Persistence helpers
   // ---------------------------------------------------------------------------
 
-  /// Schedule a persist 3 seconds after the last call, debounced.
+  /// Returns true if [dt] is within [days] days of now. Always true when
+  /// [days] == [forever] (0).
+  bool _withinAge(DateTime dt, int days) {
+    if (days == forever) return true;
+    return DateTime.now().difference(dt).inDays < days;
+  }
+
   void _schedulePersist() {
     if (_prefs == null) return;
     _persistTimer?.cancel();
@@ -334,9 +317,12 @@ class StationService extends ChangeNotifier {
     final prefs = _prefs;
     if (prefs == null) return;
 
-    // Persist station map.
+    // Persist station map, omitting entries older than the age limit.
     try {
-      final stationList = _stations.values.map(_stationToJson).toList();
+      final stationList = _stations.values
+          .where((s) => _withinAge(s.lastHeard, _stationHistoryDays))
+          .map(_stationToJson)
+          .toList();
       prefs.setString(
         _keyStationHistory,
         jsonEncode(stationList),
@@ -345,9 +331,10 @@ class StationService extends ChangeNotifier {
       debugPrint('StationService: failed to persist stations: $e');
     }
 
-    // Persist packet log (raw lines only — re-parsed on load).
+    // Persist packet log, omitting entries older than the age limit.
     try {
       final packetList = _recentPackets
+          .where((p) => _withinAge(p.receivedAt, _packetHistoryDays))
           .map((p) => {'raw': p.rawLine, 'src': p.transportSource.name})
           .toList();
       prefs.setString(

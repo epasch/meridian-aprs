@@ -74,10 +74,13 @@ class MessageService extends ChangeNotifier {
 
   static const _keyCounter = 'message_id_counter';
   static const _keyPeers = 'msg_peers';
+  static const _keyMessageDays = 'history_message_days';
   static const _retryDelays = [30, 60, 120, 240, 480]; // seconds (APRS spec)
 
-  /// Maximum messages retained per conversation (oldest pruned first).
-  static const _maxMessagesPerConv = 200;
+  /// Sentinel value meaning "keep forever" (no age-based pruning).
+  static const int forever = 0;
+
+  int _messageHistoryDays = 90;
 
   static String _convKey(String peer) => 'msg_conv_$peer';
 
@@ -104,6 +107,9 @@ class MessageService extends ChangeNotifier {
     return list;
   }
 
+  /// Max age of persisted messages in days. [forever] (0) means no age limit.
+  int get messageHistoryDays => _messageHistoryDays;
+
   /// Total unread message count across all conversations.
   int get totalUnread =>
       _conversations.values.fold(0, (sum, c) => sum + c.unreadCount);
@@ -116,6 +122,20 @@ class MessageService extends ChangeNotifier {
   // Public mutators
   // ---------------------------------------------------------------------------
 
+  /// Update the message history age limit in days ([forever] = no limit).
+  ///
+  /// Applies immediately: messages older than [days] are pruned from all
+  /// conversations, and empty conversations are removed.
+  Future<void> setMessageHistoryDays(int days) async {
+    if (_messageHistoryDays == days) return;
+    _messageHistoryDays = days;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyMessageDays, days);
+    _pruneByAge(days);
+    notifyListeners();
+    _persist(); // ignore: unawaited_futures
+  }
+
   /// Restore persisted conversations from [SharedPreferences].
   ///
   /// Call once after construction (before [runApp]). Messages that were
@@ -124,6 +144,8 @@ class MessageService extends ChangeNotifier {
   /// be resumed, but the user can trigger [resendMessage] manually.
   Future<void> loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
+    _messageHistoryDays = prefs.getInt(_keyMessageDays) ?? 90;
+
     final peersRaw = prefs.getString(_keyPeers);
     if (peersRaw == null) return;
 
@@ -138,6 +160,9 @@ class MessageService extends ChangeNotifier {
         debugPrint('MessageService: failed to load conversation $peer: $e');
       }
     }
+
+    // Drop messages that exceed the configured age limit.
+    _pruneByAge(_messageHistoryDays);
     notifyListeners();
   }
 
@@ -424,10 +449,12 @@ class MessageService extends ChangeNotifier {
   }
 
   Map<String, dynamic> _convToJson(Conversation c) {
-    // Prune to the most recent _maxMessagesPerConv messages before serialising.
-    final msgs = c.messages.length > _maxMessagesPerConv
-        ? c.messages.sublist(c.messages.length - _maxMessagesPerConv)
-        : c.messages;
+    // Omit messages older than the configured age limit before serialising.
+    final msgs = _messageHistoryDays == forever
+        ? c.messages
+        : c.messages
+              .where((e) => _withinAge(e.timestamp, _messageHistoryDays))
+              .toList();
     return {
       'peer': c.peerCallsign,
       'unreadCount': c.unreadCount,
@@ -458,6 +485,22 @@ class MessageService extends ChangeNotifier {
     'status': e.status.name,
     'retryCount': e.retryCount,
   };
+
+  /// Remove messages older than [days] from all conversations, then drop
+  /// conversations that become empty as a result.
+  void _pruneByAge(int days) {
+    if (days == forever) return;
+    _conversations.removeWhere((_, conv) {
+      conv.messages.removeWhere((e) => !_withinAge(e.timestamp, days));
+      return conv.messages.isEmpty;
+    });
+  }
+
+  /// Returns true if [dt] is within [days] days of now.
+  bool _withinAge(DateTime dt, int days) {
+    if (days == forever) return true;
+    return DateTime.now().difference(dt).inDays < days;
+  }
 
   MessageEntry _entryFromJson(Map<String, dynamic> json) {
     final statusName = (json['status'] as String?) ?? 'failed';
