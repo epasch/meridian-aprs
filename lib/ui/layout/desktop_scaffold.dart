@@ -11,9 +11,11 @@ import 'package:provider/provider.dart';
 import '../../screens/messages_screen.dart';
 import '../../screens/packet_log_screen.dart';
 import '../../screens/station_list_screen.dart';
+import '../../services/beaconing_service.dart';
 import '../../services/message_service.dart';
 import '../../services/station_service.dart';
 import '../../services/tnc_service.dart';
+import '../../theme/meridian_colors.dart';
 import '../widgets/connection_sheet.dart';
 import '../widgets/meridian_bottom_sheet.dart';
 import '../widgets/meridian_status_pill.dart';
@@ -112,6 +114,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             tooltip: _panelVisible ? 'Hide packet log' : 'Show packet log',
             onPressed: () => setState(() => _panelVisible = !_panelVisible),
           ),
+          _BeaconToolbarButton(),
           IconButton(
             icon: const Icon(Symbols.settings),
             tooltip: 'Settings',
@@ -219,6 +222,31 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Compact beacon toolbar button for the desktop AppBar.
+///
+/// Shows a filled icon when actively beaconing (auto/smart), a plain icon when
+/// idle or in manual mode. Tapping fires [BeaconingService.beaconNow].
+class _BeaconToolbarButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final svc = context.watch<BeaconingService>();
+    final isActive = svc.isActive;
+    final tooltip = switch (svc.mode) {
+      BeaconMode.auto => 'Auto beaconing (${svc.autoIntervalS}s interval)',
+      BeaconMode.smart => 'SmartBeaconing™ active',
+      BeaconMode.manual => 'Send beacon now',
+    };
+    return IconButton(
+      icon: Icon(
+        Symbols.cell_tower,
+        color: isActive ? MeridianColors.danger : null,
+      ),
+      tooltip: tooltip,
+      onPressed: () => svc.beaconNow(),
     );
   }
 }
