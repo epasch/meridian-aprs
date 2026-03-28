@@ -33,6 +33,7 @@ enum BeaconError {
   locationPermissionDenied,
   locationServiceDisabled,
   locationUnsupported, // platform has no geolocator implementation (e.g. Linux)
+  noManualPosition, // manual source selected but no coordinates stored
   unknown,
 }
 
@@ -143,37 +144,53 @@ class BeaconingService extends ChangeNotifier {
   Future<void> resetSmartDefaults() =>
       setSmartParams(SmartBeaconingParams.defaults);
 
+  /// Whether the platform's GPS implementation is known to be unavailable.
+  ///
+  /// Starts as false (unknown → assume available). Set to true permanently
+  /// the first time a [MissingPluginException] is caught — signals the UI
+  /// to disable the GPS option.
+  bool get gpsUnsupported => _gpsUnsupported;
+  bool _gpsUnsupported = false;
+
   /// Send a beacon immediately. In auto/smart mode, also resets the timer.
   ///
-  /// Position resolution order:
-  /// 1. Live GPS via geolocator (if available and permitted).
-  /// 2. Manual position set in [StationSettingsService] (fallback for desktop
-  ///    or when GPS is unavailable).
-  /// If neither source is available, the beacon is skipped and [lastError] is set.
+  /// Position is obtained from the source configured in [StationSettingsService]:
+  /// - [LocationSource.gps]: requests live GPS. If unavailable the beacon is
+  ///   skipped and [lastError] is set — no silent fallback.
+  /// - [LocationSource.manual]: uses the stored manual coordinates. If not set
+  ///   the beacon is skipped.
   Future<void> beaconNow() async {
     _lastError = null;
-    final position = await _requestPosition();
 
-    double? lat = position?.latitude;
-    double? lon = position?.longitude;
+    double? lat;
+    double? lon;
 
-    // Fall back to manually configured position when GPS is unavailable.
-    if (lat == null || lon == null) {
-      if (_settings.hasManualPosition) {
-        lat = _settings.manualLat;
-        lon = _settings.manualLon;
-        _lastError = null; // manual position is valid — clear the GPS error
-      } else {
+    if (_settings.locationSource == LocationSource.gps) {
+      final position = await _requestPosition();
+      if (position == null) {
+        // GPS failed — respect the user's choice and skip the beacon.
         notifyListeners();
         return;
       }
+      lat = position.latitude;
+      lon = position.longitude;
+      _lastPosition = position;
+    } else {
+      // Manual source.
+      if (!_settings.hasManualPosition) {
+        _lastError = BeaconError.noManualPosition;
+        notifyListeners();
+        return;
+      }
+      lat = _settings.manualLat!;
+      lon = _settings.manualLon!;
     }
 
     final aprsLine = AprsEncoder.encodePosition(
       callsign: _settings.callsign.isEmpty ? 'NOCALL' : _settings.callsign,
       ssid: _settings.ssid,
-      lat: lat!,
-      lon: lon!,
+      lat: lat,
+      lon: lon,
       symbolTable: _settings.symbolTable,
       symbolCode: _settings.symbolCode,
       comment: _settings.comment,
@@ -182,7 +199,6 @@ class BeaconingService extends ChangeNotifier {
 
     await _tx.sendLine(aprsLine);
     _lastBeaconAt = DateTime.now();
-    _lastPosition = position;
 
     if (_isActive) await _restartTimer();
     notifyListeners();
@@ -244,6 +260,7 @@ class BeaconingService extends ChangeNotifier {
       );
     } on MissingPluginException {
       // Geolocator has no implementation on this platform (e.g. Linux desktop).
+      _gpsUnsupported = true;
       _lastError = BeaconError.locationUnsupported;
       return null;
     } catch (_) {
@@ -271,6 +288,7 @@ class BeaconingService extends ChangeNotifier {
         ),
       ).listen(_onPositionUpdate);
     } on MissingPluginException {
+      _gpsUnsupported = true;
       _lastError = BeaconError.locationUnsupported;
       notifyListeners();
     }

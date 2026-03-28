@@ -497,88 +497,8 @@ class _MyStationSectionState extends State<_MyStationSection> {
                 },
           ),
         ),
-        const _SectionHeader('Manual Position'),
-        ListTile(
-          dense: true,
-          leading: const Icon(Symbols.location_on),
-          title: Text(
-            service.hasManualPosition
-                ? '${service.manualLat!.toStringAsFixed(4)}°, '
-                      '${service.manualLon!.toStringAsFixed(4)}°'
-                : 'Not set — GPS will be used when available',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: service.hasManualPosition
-                  ? null
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          subtitle: const Text(
-            'Used as fallback when GPS is unavailable (e.g. desktop)',
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _latCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Latitude',
-                    border: OutlineInputBorder(),
-                    hintText: '39.0000',
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                    signed: true,
-                  ),
-                  onEditingComplete: () => _savePosition(context),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _lonCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Longitude',
-                    border: OutlineInputBorder(),
-                    hintText: '-77.0000',
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                    signed: true,
-                  ),
-                  onEditingComplete: () => _savePosition(context),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: FilledButton.tonal(
-                  onPressed: () => _savePosition(context),
-                  child: const Text('Set'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (service.hasManualPosition)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: TextButton.icon(
-              icon: const Icon(Symbols.location_off, size: 18),
-              label: const Text('Clear manual position'),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error,
-              ),
-              onPressed: () {
-                _latCtrl.clear();
-                _lonCtrl.clear();
-                context.read<StationSettingsService>().clearManualPosition();
-              },
-            ),
-          ),
+        const _SectionHeader('Position Source'),
+        _LocationSourcePicker(latCtrl: _latCtrl, lonCtrl: _lonCtrl),
       ],
     );
   }
@@ -589,10 +509,159 @@ class _MyStationSectionState extends State<_MyStationSection> {
       _symbolCodeCtrl.text.isEmpty ? '>' : _symbolCodeCtrl.text,
     );
   }
+}
+
+/// Source picker: GPS (disabled with notice when unsupported) or Manual.
+class _LocationSourcePicker extends StatelessWidget {
+  const _LocationSourcePicker({required this.latCtrl, required this.lonCtrl});
+
+  final TextEditingController latCtrl;
+  final TextEditingController lonCtrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final svc = context.watch<StationSettingsService>();
+    final beaconing = context.watch<BeaconingService>();
+    final gpsUnavailable = beaconing.gpsUnsupported;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: SegmentedButton<LocationSource>(
+            segments: [
+              ButtonSegment(
+                value: LocationSource.gps,
+                icon: const Icon(Symbols.gps_fixed),
+                label: const Text('GPS'),
+                tooltip: gpsUnavailable
+                    ? 'GPS not available on this platform'
+                    : 'Use live GPS position',
+              ),
+              const ButtonSegment(
+                value: LocationSource.manual,
+                icon: Icon(Symbols.edit_location),
+                label: Text('Manual'),
+                tooltip: 'Use manually entered coordinates',
+              ),
+            ],
+            selected: {svc.locationSource},
+            onSelectionChanged: (s) {
+              if (gpsUnavailable && s.first == LocationSource.gps) return;
+              svc.setLocationSource(s.first);
+            },
+          ),
+        ),
+        if (gpsUnavailable && svc.locationSource == LocationSource.gps)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Row(
+              children: [
+                Icon(
+                  Symbols.warning,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'GPS is not available on this platform. '
+                    'Switch to Manual to enter coordinates.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (svc.locationSource == LocationSource.manual) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: latCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Latitude',
+                      border: OutlineInputBorder(),
+                      hintText: '39.0000',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    onEditingComplete: () => _savePosition(context),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: lonCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Longitude',
+                      border: OutlineInputBorder(),
+                      hintText: '-77.0000',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    onEditingComplete: () => _savePosition(context),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: FilledButton.tonal(
+                    onPressed: () => _savePosition(context),
+                    child: const Text('Set'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (svc.hasManualPosition)
+            ListTile(
+              dense: true,
+              leading: const Icon(Symbols.location_on),
+              title: Text(
+                '${svc.manualLat!.toStringAsFixed(6)}°, '
+                '${svc.manualLon!.toStringAsFixed(6)}°',
+              ),
+              trailing: IconButton(
+                icon: const Icon(Symbols.location_off),
+                tooltip: 'Clear manual position',
+                color: Theme.of(context).colorScheme.error,
+                onPressed: () {
+                  latCtrl.clear();
+                  lonCtrl.clear();
+                  context.read<StationSettingsService>().clearManualPosition();
+                },
+              ),
+            ),
+          if (!svc.hasManualPosition)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'No position set — beacons will not transmit until '
+                'coordinates are entered above.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
 
   void _savePosition(BuildContext context) {
-    final lat = double.tryParse(_latCtrl.text.trim());
-    final lon = double.tryParse(_lonCtrl.text.trim());
+    final lat = double.tryParse(latCtrl.text.trim());
+    final lon = double.tryParse(lonCtrl.text.trim());
     if (lat == null || lon == null) return;
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
     context.read<StationSettingsService>().setManualPosition(lat, lon);

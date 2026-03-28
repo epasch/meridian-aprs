@@ -9,6 +9,9 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Whether to use live GPS or a manually entered position for beaconing.
+enum LocationSource { gps, manual }
+
 class StationSettingsService extends ChangeNotifier {
   StationSettingsService(this._prefs)
     : _callsign = _prefs.getString(_keyCallsign) ?? '',
@@ -17,7 +20,12 @@ class StationSettingsService extends ChangeNotifier {
       _symbolCode = _prefs.getString(_keySymbolCode) ?? '>',
       _comment = _prefs.getString(_keyComment) ?? '',
       _manualLat = _prefs.getDouble(_keyManualLat),
-      _manualLon = _prefs.getDouble(_keyManualLon);
+      _manualLon = _prefs.getDouble(_keyManualLon),
+      _locationSource =
+          LocationSource.values[(_prefs.getInt(_keyLocationSource) ?? 0).clamp(
+            0,
+            LocationSource.values.length - 1,
+          )];
 
   final SharedPreferences _prefs;
 
@@ -30,6 +38,7 @@ class StationSettingsService extends ChangeNotifier {
   static const _keyComment = 'user_comment';
   static const _keyManualLat = 'user_manual_lat';
   static const _keyManualLon = 'user_manual_lon';
+  static const _keyLocationSource = 'user_location_source';
 
   String _callsign;
   int _ssid;
@@ -38,6 +47,7 @@ class StationSettingsService extends ChangeNotifier {
   String _comment;
   double? _manualLat;
   double? _manualLon;
+  LocationSource _locationSource;
 
   String get callsign => _callsign;
   int get ssid => _ssid;
@@ -45,7 +55,10 @@ class StationSettingsService extends ChangeNotifier {
   String get symbolCode => _symbolCode;
   String get comment => _comment;
 
-  /// Manually entered fallback position. Null if not set.
+  /// Whether to obtain position from live GPS or from [manualLat]/[manualLon].
+  LocationSource get locationSource => _locationSource;
+
+  /// Manually entered position. Null if not set.
   double? get manualLat => _manualLat;
   double? get manualLon => _manualLon;
   bool get hasManualPosition => _manualLat != null && _manualLon != null;
@@ -86,6 +99,13 @@ class StationSettingsService extends ChangeNotifier {
     if (v == _comment) return;
     _comment = v;
     await _prefs.setString(_keyComment, v);
+    notifyListeners();
+  }
+
+  Future<void> setLocationSource(LocationSource source) async {
+    if (source == _locationSource) return;
+    _locationSource = source;
+    await _prefs.setInt(_keyLocationSource, source.index);
     notifyListeners();
   }
 
