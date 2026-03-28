@@ -8,8 +8,12 @@ import 'package:provider/provider.dart';
 
 import '../core/transport/tnc_config.dart';
 import '../core/transport/tnc_preset.dart';
+import '../services/beaconing_service.dart';
+import '../services/station_settings_service.dart';
 import '../services/tnc_service.dart';
+import '../services/tx_service.dart';
 import '../ui/widgets/ble_scanner_sheet.dart';
+import '../ui/widgets/callsign_field.dart';
 import '../ui/widgets/meridian_bottom_sheet.dart';
 import '../theme/meridian_colors.dart';
 import '../theme/theme_controller.dart';
@@ -291,23 +295,206 @@ class _ColorSwatch extends StatelessWidget {
 // My Station
 // ---------------------------------------------------------------------------
 
-class _MyStationSection extends StatelessWidget {
+class _MyStationSection extends StatefulWidget {
   const _MyStationSection();
 
   @override
+  State<_MyStationSection> createState() => _MyStationSectionState();
+}
+
+class _MyStationSectionState extends State<_MyStationSection> {
+  late final TextEditingController _callsignCtrl;
+  late final TextEditingController _symbolTableCtrl;
+  late final TextEditingController _symbolCodeCtrl;
+  late final TextEditingController _commentCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = context.read<StationSettingsService>();
+    _callsignCtrl = TextEditingController(text: s.callsign);
+    _symbolTableCtrl = TextEditingController(text: s.symbolTable);
+    _symbolCodeCtrl = TextEditingController(text: s.symbolCode);
+    _commentCtrl = TextEditingController(text: s.comment);
+  }
+
+  @override
+  void dispose() {
+    _callsignCtrl.dispose();
+    _symbolTableCtrl.dispose();
+    _symbolCodeCtrl.dispose();
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Column(
+    final service = context.watch<StationSettingsService>();
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader('My Station'),
-        ListTile(
-          title: Text('Callsign'),
-          trailing: Icon(Symbols.chevron_right),
+        const _SectionHeader('My Station'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: CallsignField(
+            controller: _callsignCtrl,
+            label: 'Callsign',
+            onChanged: (_) {}, // validation only; persist on exit
+          ),
         ),
-        ListTile(title: Text('SSID'), trailing: Icon(Symbols.chevron_right)),
-        ListTile(title: Text('Symbol'), trailing: Icon(Symbols.chevron_right)),
-        ListTile(title: Text('Comment'), trailing: Icon(Symbols.chevron_right)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Focus(
+            onFocusChange: (hasFocus) {
+              if (!hasFocus) {
+                context.read<StationSettingsService>().setCallsign(
+                  _callsignCtrl.text,
+                );
+              }
+            },
+            child: const SizedBox.shrink(),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: DropdownButtonFormField<int>(
+            decoration: const InputDecoration(
+              labelText: 'SSID',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Symbols.tag),
+            ),
+            initialValue: service.ssid,
+            items: List.generate(16, (i) {
+              final label = switch (i) {
+                0 => '0 — No suffix',
+                1 => '1 — Digipeater',
+                2 => '2 — Generic',
+                3 => '3 — Generic',
+                4 => '4 — Generic',
+                5 => '5 — Portable',
+                6 => '6 — Special',
+                7 => '7 — Handheld',
+                8 => '8 — Boat',
+                9 => '9 — Vehicle',
+                10 => '10 — Internet',
+                11 => '11 — Aircraft',
+                12 => '12 — Balloon',
+                13 => '13 — Bike',
+                14 => '14 — ATV/GPS',
+                _ => '15 — Satellite',
+              };
+              return DropdownMenuItem(value: i, child: Text(label));
+            }),
+            onChanged: (v) {
+              if (v != null) {
+                context.read<StationSettingsService>().setSsid(v);
+              }
+            },
+          ),
+        ),
+        ListTile(
+          dense: true,
+          title: const Text('Your address'),
+          subtitle: Text(
+            service.fullAddress.isEmpty ? '—' : service.fullAddress,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 80,
+                child: TextFormField(
+                  controller: _symbolTableCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Table',
+                    border: OutlineInputBorder(),
+                    hintText: '/',
+                  ),
+                  maxLength: 1,
+                  buildCounter:
+                      (
+                        _, {
+                        required currentLength,
+                        required isFocused,
+                        maxLength,
+                      }) => null,
+                  onEditingComplete: () => _saveSymbol(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 80,
+                child: TextFormField(
+                  controller: _symbolCodeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Symbol',
+                    border: OutlineInputBorder(),
+                    hintText: '>',
+                  ),
+                  maxLength: 1,
+                  buildCounter:
+                      (
+                        _, {
+                        required currentLength,
+                        required isFocused,
+                        maxLength,
+                      }) => null,
+                  onEditingComplete: () => _saveSymbol(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Symbol table & code\n(e.g. / + > for car)',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: TextFormField(
+            controller: _commentCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Comment',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Symbols.comment),
+              hintText: 'e.g. Meridian APRS',
+              counterText: '',
+            ),
+            maxLength: 43,
+            onEditingComplete: () {
+              context.read<StationSettingsService>().setComment(
+                _commentCtrl.text,
+              );
+              FocusScope.of(context).unfocus();
+            },
+            onChanged: (v) => setState(() {}),
+            buildCounter:
+                (_, {required currentLength, required isFocused, maxLength}) {
+                  return Text(
+                    '$currentLength / ${maxLength ?? 43}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  );
+                },
+          ),
+        ),
       ],
+    );
+  }
+
+  void _saveSymbol(BuildContext context) {
+    context.read<StationSettingsService>().setSymbol(
+      _symbolTableCtrl.text.isEmpty ? '/' : _symbolTableCtrl.text,
+      _symbolCodeCtrl.text.isEmpty ? '>' : _symbolCodeCtrl.text,
     );
   }
 }
@@ -321,21 +508,312 @@ class _BeaconingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    final beaconing = context.watch<BeaconingService>();
+    final tx = context.watch<TxService>();
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader('Beaconing'),
-        SwitchListTile(
-          title: Text('Smart beaconing'),
-          subtitle: Text(
-            'Adjusts beacon rate based on speed and heading change.',
+        const _SectionHeader('Beaconing'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              const Text('Mode'),
+              const SizedBox(width: 16),
+              SegmentedButton<BeaconMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: BeaconMode.manual,
+                    icon: Icon(Symbols.touch_app),
+                    label: Text('Manual'),
+                  ),
+                  ButtonSegment(
+                    value: BeaconMode.auto,
+                    icon: Icon(Symbols.timer),
+                    label: Text('Auto'),
+                  ),
+                  ButtonSegment(
+                    value: BeaconMode.smart,
+                    icon: Icon(Symbols.route),
+                    label: Text('Smart'),
+                  ),
+                ],
+                selected: {beaconing.mode},
+                onSelectionChanged: (modes) {
+                  if (modes.isNotEmpty) {
+                    context.read<BeaconingService>().setMode(modes.first);
+                  }
+                },
+              ),
+            ],
           ),
-          value: false,
-          onChanged: null, // Stub — not yet functional.
         ),
+        if (beaconing.mode == BeaconMode.auto) ...[
+          _IntervalTile(
+            intervalS: beaconing.autoIntervalS,
+            onChanged: (v) =>
+                context.read<BeaconingService>().setAutoInterval(v),
+          ),
+        ],
+        if (beaconing.mode == BeaconMode.smart) ...[
+          ListTile(
+            title: const Text('SmartBeaconing™ Parameters'),
+            subtitle: Text(
+              'Fast ${beaconing.smartParams.fastSpeedKmh.toInt()} km/h → '
+              '${beaconing.smartParams.fastRateS}s  •  '
+              'Slow ${beaconing.smartParams.slowSpeedKmh.toInt()} km/h → '
+              '${beaconing.smartParams.slowRateS}s',
+            ),
+            trailing: const Icon(Symbols.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                // TODO(ios): CupertinoPageRoute
+                builder: (_) => const _SmartBeaconingParamsScreen(),
+              ),
+            ),
+          ),
+        ],
+        if (beaconing.mode != BeaconMode.manual) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Row(
+              children: [
+                const Text('Transmit via'),
+                const SizedBox(width: 16),
+                Tooltip(
+                  message: !tx.tncAvailable ? 'TNC not connected' : '',
+                  child: SegmentedButton<TxTransportPref>(
+                    segments: [
+                      const ButtonSegment(
+                        value: TxTransportPref.aprsIs,
+                        icon: Icon(Symbols.wifi),
+                        label: Text('APRS-IS'),
+                      ),
+                      ButtonSegment(
+                        value: TxTransportPref.tnc,
+                        icon: const Icon(Symbols.settings_input_antenna),
+                        label: const Text('RF / TNC'),
+                        enabled: tx.tncAvailable,
+                      ),
+                    ],
+                    selected: {
+                      tx.preference == TxTransportPref.auto
+                          ? tx.effective
+                          : tx.preference,
+                    },
+                    onSelectionChanged: (modes) {
+                      if (modes.isNotEmpty) {
+                        context.read<TxService>().setPreference(modes.first);
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _IntervalTile extends StatelessWidget {
+  const _IntervalTile({required this.intervalS, required this.onChanged});
+
+  final int intervalS;
+  final ValueChanged<int> onChanged;
+
+  String _label(int s) {
+    if (s < 60) return '$s seconds';
+    if (s % 60 == 0) return '${s ~/ 60} minutes';
+    return '${s ~/ 60}m ${s % 60}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         ListTile(
-          title: Text('Interval'),
-          trailing: Icon(Symbols.chevron_right),
+          title: const Text('Beacon Interval'),
+          subtitle: Text(_label(intervalS)),
+          trailing: Text(
+            _label(intervalS),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Slider(
+            min: 30,
+            max: 3600,
+            divisions: ((3600 - 30) ~/ 30),
+            value: intervalS.toDouble(),
+            label: _label(intervalS),
+            onChanged: (v) => onChanged(v.round()),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Sub-screen for SmartBeaconing™ parameter tuning.
+class _SmartBeaconingParamsScreen extends StatefulWidget {
+  const _SmartBeaconingParamsScreen();
+
+  @override
+  State<_SmartBeaconingParamsScreen> createState() =>
+      _SmartBeaconingParamsScreenState();
+}
+
+class _SmartBeaconingParamsScreenState
+    extends State<_SmartBeaconingParamsScreen> {
+  late SmartBeaconingParams _params;
+
+  @override
+  void initState() {
+    super.initState();
+    _params = context.read<BeaconingService>().smartParams;
+  }
+
+  Future<void> _save() async {
+    await context.read<BeaconingService>().setSmartParams(_params);
+  }
+
+  Future<void> _reset() async {
+    await context.read<BeaconingService>().resetSmartDefaults();
+    setState(() {
+      _params = SmartBeaconingParams.defaults;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('SmartBeaconing™ Parameters')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _paramRow(
+            label: 'Fast Speed (km/h)',
+            value: _params.fastSpeedKmh,
+            min: 10,
+            max: 200,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(fastSpeedKmh: v));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Fast Rate (seconds)',
+            value: _params.fastRateS.toDouble(),
+            min: 10,
+            max: 600,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(fastRateS: v.round()));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Slow Speed (km/h)',
+            value: _params.slowSpeedKmh,
+            min: 1,
+            max: 30,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(slowSpeedKmh: v));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Slow Rate (seconds)',
+            value: _params.slowRateS.toDouble(),
+            min: 60,
+            max: 3600,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(slowRateS: v.round()));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Min Turn Time (seconds)',
+            value: _params.minTurnTimeS.toDouble(),
+            min: 5,
+            max: 120,
+            onChanged: (v) {
+              setState(
+                () => _params = _params.copyWith(minTurnTimeS: v.round()),
+              );
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Min Turn Angle (degrees)',
+            value: _params.minTurnAngleDeg,
+            min: 5,
+            max: 90,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(minTurnAngleDeg: v));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Turn Slope',
+            value: _params.turnSlope,
+            min: 10,
+            max: 600,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(turnSlope: v));
+              _save();
+            },
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            icon: const Icon(Symbols.refresh),
+            label: const Text('Reset to Defaults'),
+            onPressed: _reset,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paramRow({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+  }) {
+    final displayValue = value == value.truncateToDouble()
+        ? '${value.toInt()}'
+        : value.toStringAsFixed(1);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.bodyMedium),
+              Text(
+                displayValue,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Slider(
+          min: min,
+          max: max,
+          value: value.clamp(min, max),
+          onChanged: onChanged,
         ),
       ],
     );

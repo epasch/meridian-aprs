@@ -293,6 +293,80 @@ Pure Dart AX.25 UI frame byte decoder (`lib/core/ax25/ax25_parser.dart`). Decode
 
 ---
 
+## Beaconing Engine (v0.5)
+
+### AprsEncoder
+
+Pure Dart encoder (`lib/core/packet/aprs_encoder.dart`). Produces APRS-IS formatted strings from structured data. No platform imports.
+
+- `encodePosition(...)` — uncompressed position packet (`DDmm.hhN/DDDmm.hhW`); DTI `!` (no messaging) or `=` (with messaging capability)
+- `encodeMessage(...)` — APRS §14 message packet; addressee padded to 9 characters; `{id}` suffix when message ID provided
+- `encodeAck(...)` / `encodeRej(...)` — ACK and REJ response packets
+- Destination is `APZMDN` throughout. `TODO(tocall): register with WB4APR before v1.0`
+
+### Ax25Encoder
+
+Pure Dart AX.25 UI frame encoder (`lib/core/ax25/ax25_encoder.dart`). Complements `Ax25Parser`.
+
+- `buildAprsFrame(...)` — constructs an `Ax25Frame` from source callsign + SSID + APRS info field + optional digipeater alias list (default: WIDE1-1, WIDE2-1)
+- `encodeUiFrame(Ax25Frame)` — serialises to raw AX.25 bytes: each address is 7 bytes (6-byte left-shifted ASCII callsign + SSID byte), end-of-address-list bit set on the last address, control=0x03 (UI), PID=0xF0 (no layer 3)
+
+### SmartBeaconing
+
+Pure Dart algorithm implementation (`lib/core/beaconing/smart_beaconing.dart`). Stateless utility class — fully unit-testable with no platform dependencies.
+
+- `SmartBeaconingParams` — configuration value object with `const defaults` (APRSdroid-compatible values: fastSpeed=100 km/h, fastRate=180 s, slowSpeed=5 km/h, slowRate=1800 s, minTurnTime=15 s, minTurnAngle=28°, turnSlope=255). Serialises via `toMap`/`fromMap`.
+- `SmartBeaconing.computeInterval(p, speedKmh)` — linear interpolation between slowRate and fastRate
+- `SmartBeaconing.turnThreshold(p, speedKmh)` — `turnSlope/speed + minAngle`, capped at 180°
+- `SmartBeaconing.shouldTriggerTurn(p, speed, headingChange, timeSinceLast)` — true when `|headingChange| >= threshold` and cooldown elapsed
+
+### BeaconingService
+
+`ChangeNotifier` service (`lib/services/beaconing_service.dart`). Owns GPS subscription, beacon timer, and TX dispatch.
+
+- Modes: `BeaconMode.manual` (on-demand), `BeaconMode.auto` (fixed interval), `BeaconMode.smart` (SmartBeaconing™ algorithm)
+- `beaconNow()` — requests current GPS position (`Geolocator.getCurrentPosition`), encodes position via `AprsEncoder.encodePosition`, sends via `TxService.sendLine`
+- Auto mode: `Timer.periodic` with `autoIntervalS` (default 600 s, persisted as `beacon_interval_s`)
+- Smart mode: `Geolocator.getPositionStream` subscription; fires `beaconNow()` on interval OR turn trigger
+- Exposes `lastBeaconAt` (DateTime) for FAB display
+- Persists mode and smart params to SharedPreferences
+
+### TxService
+
+Global TX transport router (`lib/services/tx_service.dart`). `ChangeNotifier`. Routes all outgoing packets to either APRS-IS or TNC — a single global preference (not per-station); see ADR-023.
+
+- `TxTransportPref { auto, aprsIs, tnc }` — stored in SharedPreferences (`tx_transport_pref`); `auto` resolves to TNC when connected, APRS-IS otherwise
+- `sendLine(String aprsLine)` — routes to `AprsTransport.sendLine` (APRS-IS) or builds AX.25 bytes via `Ax25Encoder` and calls `KissTncTransport.sendFrame` (TNC)
+- `TxEvent` sealed class — `TxEventTncDisconnected` / `TxEventTncReconnected` drive UI banners without persisting fallback
+
+---
+
+## Messaging Architecture (v0.5)
+
+### MessageService
+
+`ChangeNotifier` service (`lib/services/message_service.dart`). Owns conversation state, retry scheduler, and ACK handling.
+
+- `Conversation` — holds peer callsign, message list, unread count, last activity timestamp; sorted newest-first
+- `MessageEntry` — localId (UUID), wireId (APRS message ID), text, timestamp, direction, `MessageStatus`
+- `MessageStatus { pending, acked, retrying, failed, rejected }` — drives per-bubble status icons in the thread UI
+
+Retry scheduler (per pending outbound message):
+- Backoff delays: 30 / 60 / 120 / 240 / 480 seconds (APRS spec §14 guidance); see ADR-022
+- One `Timer` per pending message; cancelled on ACK receipt
+- After 5th retry without ACK: status → `failed`
+
+Inbound handling:
+- Subscribes to `StationService.packetStream`, filters `MessagePacket` addressed to `_settings.fullAddress`
+- ACK/REJ lines routed to the appropriate pending message
+- Duplicate detection via `Set<String>` keyed `"sourceCallsign:wireId"` — same pair is ignored
+
+Message ID counter:
+- SharedPreferences key `message_id_counter` (int); incremented per send; wraps 999 → 001
+- Formatted as zero-padded 3-digit string
+
+---
+
 ## Key Dependencies
 
 | Package | Purpose |
@@ -300,8 +374,9 @@ Pure Dart AX.25 UI frame byte decoder (`lib/core/ax25/ax25_parser.dart`). Decode
 | `flutter_map` | Map rendering with OpenStreetMap tiles |
 | `flutter_blue_plus` | BLE transport (KISS/BLE) |
 | `flutter_libserialport` | USB serial transport (KISS/USB) |
-| `provider` | ThemeController ChangeNotifier wiring |
-| `shared_preferences` | Theme mode, seed color, and onboarding flag persistence |
+| `geolocator` | GPS/location access for beaconing (added v0.5) |
+| `provider` | ChangeNotifier wiring throughout service layer |
+| `shared_preferences` | Theme mode, settings, beaconing config, and session state persistence |
 | `dynamic_color` | Android 12+ wallpaper-derived ColorScheme |
 | `m3e_design` | M3 Expressive ThemeExtension (shapes, spacing, motion, typography tokens) |
 | `flutter_m3shapes` | M3 Expressive shape widgets (M3Container) |

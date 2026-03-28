@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Meridian APRS uses your location to transmit position beacons on the APRS network.</string>
 </dict>
 </plist>

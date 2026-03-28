@@ -6,8 +6,12 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:provider/provider.dart';
+
+import '../../screens/messages_screen.dart';
 import '../../screens/packet_log_screen.dart';
 import '../../screens/station_list_screen.dart';
+import '../../services/message_service.dart';
 import '../../services/station_service.dart';
 import '../../services/tnc_service.dart';
 import '../widgets/connection_sheet.dart';
@@ -124,6 +128,15 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                     builder: (_) => StationListScreen(service: widget.service),
                   ),
                 );
+              } else if (i == 3) {
+                // Messages — push thread list.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    // TODO(ios): CupertinoPageRoute
+                    builder: (_) => const MessagesScreen(),
+                  ),
+                );
               } else if (i == 4) {
                 // Connection — transient action; open sheet without updating
                 // the persistent rail selection.
@@ -135,33 +148,42 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                 setState(() => _selectedIndex = i);
               }
             },
-            destinations: const [
-              NavigationRailDestination(
+            destinations: [
+              const NavigationRailDestination(
                 icon: Icon(Symbols.map),
                 selectedIcon: Icon(Symbols.map),
                 label: Text('Map'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Symbols.list_alt),
                 selectedIcon: Icon(Symbols.list_alt),
                 label: Text('Log'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Symbols.people),
                 selectedIcon: Icon(Symbols.people),
                 label: Text('Stations'),
               ),
               NavigationRailDestination(
-                icon: Icon(Symbols.chat),
-                selectedIcon: Icon(Symbols.chat),
-                label: Text('Messages'),
+                icon: Builder(
+                  builder: (ctx) {
+                    final unread = ctx.watch<MessageService>().totalUnread;
+                    return Badge(
+                      isLabelVisible: unread > 0,
+                      label: Text('$unread'),
+                      child: const Icon(Symbols.chat),
+                    );
+                  },
+                ),
+                selectedIcon: const Icon(Symbols.chat),
+                label: const Text('Messages'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Symbols.router),
                 selectedIcon: Icon(Symbols.router),
                 label: Text('Connection'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Symbols.settings),
                 selectedIcon: Icon(Symbols.settings),
                 label: Text('Settings'),

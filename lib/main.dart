@@ -11,8 +11,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/transport/aprs_is_transport.dart';
 import 'screens/map_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
+import 'services/beaconing_service.dart';
+import 'services/message_service.dart';
 import 'services/station_service.dart';
+import 'services/station_settings_service.dart';
 import 'services/tnc_service.dart';
+import 'services/tx_service.dart';
 import 'theme/android_theme.dart';
 import 'theme/desktop_theme.dart';
 import 'theme/ios_theme.dart';
@@ -60,11 +64,26 @@ Future<void> main() async {
   final tncService = TncService(service);
   await tncService.loadPersistedConfig();
 
+  final stationSettings = StationSettingsService(prefs);
+  final txService = TxService(transport, tncService);
+  await txService.loadPersistedPreference();
+
+  final beaconingService = BeaconingService(stationSettings, txService);
+  await beaconingService.loadPersistedSettings();
+
+  final messageService = MessageService(stationSettings, txService, service);
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<ThemeController>.value(value: themeController),
         ChangeNotifierProvider<TncService>.value(value: tncService),
+        ChangeNotifierProvider<StationSettingsService>.value(
+          value: stationSettings,
+        ),
+        ChangeNotifierProvider<TxService>.value(value: txService),
+        ChangeNotifierProvider<BeaconingService>.value(value: beaconingService),
+        ChangeNotifierProvider<MessageService>.value(value: messageService),
       ],
       child: MeridianApp(
         onboardingComplete: onboardingComplete,

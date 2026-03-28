@@ -66,6 +66,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Meridian APRS uses your location to transmit position beacons on the APRS network.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Meridian APRS uses Bluetooth to connect to a KISS TNC for radio packet reception.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
