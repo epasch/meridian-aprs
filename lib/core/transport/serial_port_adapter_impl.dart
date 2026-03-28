@@ -49,10 +49,18 @@ class DefaultSerialPortAdapter implements SerialPortAdapter {
 
   @override
   void close() {
-    _reader?.close();
+    try {
+      _reader?.close();
+    } catch (_) {
+      // Reader may already be closed after a physical disconnect.
+    }
     _reader = null;
-    _port.close();
-    _port.dispose();
+    try {
+      _port.close();
+    } catch (_) {}
+    try {
+      _port.dispose();
+    } catch (_) {}
   }
 
   int _parityConstant(String parity) {
