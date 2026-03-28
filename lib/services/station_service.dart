@@ -128,7 +128,10 @@ class StationService extends ChangeNotifier {
     await _transport.dispose();
     await _stationController.close();
     await _packetController.close();
-    super.dispose();
+    // Do not call super.dispose() here — the ChangeNotifier lifecycle is
+    // owned by the ChangeNotifierProvider in main.dart, which calls dispose()
+    // when the widget tree is torn down. Calling it here as well would cause
+    // a double-dispose assertion in debug mode.
   }
 
   // ---------------------------------------------------------------------------
