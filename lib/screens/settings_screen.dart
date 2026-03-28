@@ -307,6 +307,8 @@ class _MyStationSectionState extends State<_MyStationSection> {
   late final TextEditingController _symbolTableCtrl;
   late final TextEditingController _symbolCodeCtrl;
   late final TextEditingController _commentCtrl;
+  late final TextEditingController _latCtrl;
+  late final TextEditingController _lonCtrl;
 
   @override
   void initState() {
@@ -316,6 +318,12 @@ class _MyStationSectionState extends State<_MyStationSection> {
     _symbolTableCtrl = TextEditingController(text: s.symbolTable);
     _symbolCodeCtrl = TextEditingController(text: s.symbolCode);
     _commentCtrl = TextEditingController(text: s.comment);
+    _latCtrl = TextEditingController(
+      text: s.manualLat != null ? s.manualLat!.toStringAsFixed(6) : '',
+    );
+    _lonCtrl = TextEditingController(
+      text: s.manualLon != null ? s.manualLon!.toStringAsFixed(6) : '',
+    );
   }
 
   @override
@@ -324,6 +332,8 @@ class _MyStationSectionState extends State<_MyStationSection> {
     _symbolTableCtrl.dispose();
     _symbolCodeCtrl.dispose();
     _commentCtrl.dispose();
+    _latCtrl.dispose();
+    _lonCtrl.dispose();
     super.dispose();
   }
 
@@ -487,6 +497,88 @@ class _MyStationSectionState extends State<_MyStationSection> {
                 },
           ),
         ),
+        const _SectionHeader('Manual Position'),
+        ListTile(
+          dense: true,
+          leading: const Icon(Symbols.location_on),
+          title: Text(
+            service.hasManualPosition
+                ? '${service.manualLat!.toStringAsFixed(4)}°, '
+                      '${service.manualLon!.toStringAsFixed(4)}°'
+                : 'Not set — GPS will be used when available',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: service.hasManualPosition
+                  ? null
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          subtitle: const Text(
+            'Used as fallback when GPS is unavailable (e.g. desktop)',
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _latCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Latitude',
+                    border: OutlineInputBorder(),
+                    hintText: '39.0000',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  onEditingComplete: () => _savePosition(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _lonCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Longitude',
+                    border: OutlineInputBorder(),
+                    hintText: '-77.0000',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  onEditingComplete: () => _savePosition(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: FilledButton.tonal(
+                  onPressed: () => _savePosition(context),
+                  child: const Text('Set'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (service.hasManualPosition)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: TextButton.icon(
+              icon: const Icon(Symbols.location_off, size: 18),
+              label: const Text('Clear manual position'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () {
+                _latCtrl.clear();
+                _lonCtrl.clear();
+                context.read<StationSettingsService>().clearManualPosition();
+              },
+            ),
+          ),
       ],
     );
   }
@@ -496,6 +588,15 @@ class _MyStationSectionState extends State<_MyStationSection> {
       _symbolTableCtrl.text.isEmpty ? '/' : _symbolTableCtrl.text,
       _symbolCodeCtrl.text.isEmpty ? '>' : _symbolCodeCtrl.text,
     );
+  }
+
+  void _savePosition(BuildContext context) {
+    final lat = double.tryParse(_latCtrl.text.trim());
+    final lon = double.tryParse(_lonCtrl.text.trim());
+    if (lat == null || lon == null) return;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+    context.read<StationSettingsService>().setManualPosition(lat, lon);
+    FocusScope.of(context).unfocus();
   }
 }
 

@@ -14,6 +14,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -28,7 +29,12 @@ export '../core/beaconing/smart_beaconing.dart' show SmartBeaconingParams;
 enum BeaconMode { manual, auto, smart }
 
 /// Error reason for the last failed beacon attempt.
-enum BeaconError { locationPermissionDenied, locationServiceDisabled, unknown }
+enum BeaconError {
+  locationPermissionDenied,
+  locationServiceDisabled,
+  locationUnsupported, // platform has no geolocator implementation (e.g. Linux)
+  unknown,
+}
 
 class BeaconingService extends ChangeNotifier {
   BeaconingService(this._settings, this._tx);
@@ -138,19 +144,36 @@ class BeaconingService extends ChangeNotifier {
       setSmartParams(SmartBeaconingParams.defaults);
 
   /// Send a beacon immediately. In auto/smart mode, also resets the timer.
+  ///
+  /// Position resolution order:
+  /// 1. Live GPS via geolocator (if available and permitted).
+  /// 2. Manual position set in [StationSettingsService] (fallback for desktop
+  ///    or when GPS is unavailable).
+  /// If neither source is available, the beacon is skipped and [lastError] is set.
   Future<void> beaconNow() async {
     _lastError = null;
     final position = await _requestPosition();
-    if (position == null) {
-      notifyListeners();
-      return;
+
+    double? lat = position?.latitude;
+    double? lon = position?.longitude;
+
+    // Fall back to manually configured position when GPS is unavailable.
+    if (lat == null || lon == null) {
+      if (_settings.hasManualPosition) {
+        lat = _settings.manualLat;
+        lon = _settings.manualLon;
+        _lastError = null; // manual position is valid — clear the GPS error
+      } else {
+        notifyListeners();
+        return;
+      }
     }
 
     final aprsLine = AprsEncoder.encodePosition(
       callsign: _settings.callsign.isEmpty ? 'NOCALL' : _settings.callsign,
       ssid: _settings.ssid,
-      lat: position.latitude,
-      lon: position.longitude,
+      lat: lat!,
+      lon: lon!,
       symbolTable: _settings.symbolTable,
       symbolCode: _settings.symbolCode,
       comment: _settings.comment,
@@ -197,28 +220,32 @@ class BeaconingService extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<Position?> _requestPosition() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _lastError = BeaconError.locationServiceDisabled;
-      return null;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      _lastError = BeaconError.locationPermissionDenied;
-      return null;
-    }
-
     try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _lastError = BeaconError.locationServiceDisabled;
+        return null;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _lastError = BeaconError.locationPermissionDenied;
+        return null;
+      }
+
       return await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.best,
         ),
       );
+    } on MissingPluginException {
+      // Geolocator has no implementation on this platform (e.g. Linux desktop).
+      _lastError = BeaconError.locationUnsupported;
+      return null;
     } catch (_) {
       _lastError = BeaconError.unknown;
       return null;
@@ -229,17 +256,24 @@ class BeaconingService extends ChangeNotifier {
     await _positionSub?.cancel();
     if (_mode != BeaconMode.smart) return;
 
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return;
-    }
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
 
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.best),
-    ).listen(_onPositionUpdate);
+      _positionSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+        ),
+      ).listen(_onPositionUpdate);
+    } on MissingPluginException {
+      _lastError = BeaconError.locationUnsupported;
+      notifyListeners();
+    }
   }
 
   void _onPositionUpdate(Position position) {
