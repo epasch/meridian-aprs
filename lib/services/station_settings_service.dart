@@ -22,10 +22,10 @@ class StationSettingsService extends ChangeNotifier {
       _manualLat = _prefs.getDouble(_keyManualLat),
       _manualLon = _prefs.getDouble(_keyManualLon),
       _locationSource =
-          LocationSource.values[(_prefs.getInt(_keyLocationSource) ?? 0).clamp(
-            0,
-            LocationSource.values.length - 1,
-          )];
+          LocationSource.values.elementAtOrNull(
+            _prefs.getInt(_keyLocationSource) ?? 0,
+          ) ??
+          LocationSource.gps;
 
   final SharedPreferences _prefs;
 
