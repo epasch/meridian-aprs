@@ -18,6 +18,7 @@ import '../services/station_settings_service.dart';
 import '../services/tnc_service.dart';
 import '../services/tx_service.dart';
 import '../ui/widgets/ble_scanner_sheet.dart';
+import '../ui/widgets/aprs_symbol_widget.dart';
 import '../ui/widgets/callsign_field.dart';
 import '../ui/widgets/meridian_bottom_sheet.dart';
 import '../theme/meridian_colors.dart';
@@ -310,19 +311,17 @@ class _MyStationSection extends StatefulWidget {
 
 class _MyStationSectionState extends State<_MyStationSection> {
   late final TextEditingController _callsignCtrl;
-  late final TextEditingController _symbolTableCtrl;
-  late final TextEditingController _symbolCodeCtrl;
   late final TextEditingController _commentCtrl;
   late final TextEditingController _latCtrl;
   late final TextEditingController _lonCtrl;
+  late final FocusNode _callsignFocus;
+  late final FocusNode _commentFocus;
 
   @override
   void initState() {
     super.initState();
     final s = context.read<StationSettingsService>();
     _callsignCtrl = TextEditingController(text: s.callsign);
-    _symbolTableCtrl = TextEditingController(text: s.symbolTable);
-    _symbolCodeCtrl = TextEditingController(text: s.symbolCode);
     _commentCtrl = TextEditingController(text: s.comment);
     _latCtrl = TextEditingController(
       text: s.manualLat != null ? s.manualLat!.toStringAsFixed(6) : '',
@@ -330,16 +329,30 @@ class _MyStationSectionState extends State<_MyStationSection> {
     _lonCtrl = TextEditingController(
       text: s.manualLon != null ? s.manualLon!.toStringAsFixed(6) : '',
     );
+    _callsignFocus = FocusNode()
+      ..addListener(() {
+        if (!_callsignFocus.hasFocus) {
+          context.read<StationSettingsService>().setCallsign(
+            _callsignCtrl.text,
+          );
+        }
+      });
+    _commentFocus = FocusNode()
+      ..addListener(() {
+        if (!_commentFocus.hasFocus) {
+          context.read<StationSettingsService>().setComment(_commentCtrl.text);
+        }
+      });
   }
 
   @override
   void dispose() {
     _callsignCtrl.dispose();
-    _symbolTableCtrl.dispose();
-    _symbolCodeCtrl.dispose();
     _commentCtrl.dispose();
     _latCtrl.dispose();
     _lonCtrl.dispose();
+    _callsignFocus.dispose();
+    _commentFocus.dispose();
     super.dispose();
   }
 
@@ -355,21 +368,9 @@ class _MyStationSectionState extends State<_MyStationSection> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: CallsignField(
             controller: _callsignCtrl,
+            focusNode: _callsignFocus,
             label: 'Callsign',
-            onChanged: (_) {}, // validation only; persist on exit
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Focus(
-            onFocusChange: (hasFocus) {
-              if (!hasFocus) {
-                context.read<StationSettingsService>().setCallsign(
-                  _callsignCtrl.text,
-                );
-              }
-            },
-            child: const SizedBox.shrink(),
+            onChanged: (_) {}, // validation only; persist on focus loss
           ),
         ),
         Padding(
@@ -420,65 +421,18 @@ class _MyStationSectionState extends State<_MyStationSection> {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 80,
-                child: TextFormField(
-                  controller: _symbolTableCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Table',
-                    border: OutlineInputBorder(),
-                    hintText: '/',
-                  ),
-                  maxLength: 1,
-                  buildCounter:
-                      (
-                        _, {
-                        required currentLength,
-                        required isFocused,
-                        maxLength,
-                      }) => null,
-                  onEditingComplete: () => _saveSymbol(context),
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 80,
-                child: TextFormField(
-                  controller: _symbolCodeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Symbol',
-                    border: OutlineInputBorder(),
-                    hintText: '>',
-                  ),
-                  maxLength: 1,
-                  buildCounter:
-                      (
-                        _, {
-                        required currentLength,
-                        required isFocused,
-                        maxLength,
-                      }) => null,
-                  onEditingComplete: () => _saveSymbol(context),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Symbol table & code\n(e.g. / + > for car)',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ],
-          ),
+        _SymbolPickerTile(
+          symbolTable: service.symbolTable,
+          symbolCode: service.symbolCode,
+          onChanged: (table, code) {
+            context.read<StationSettingsService>().setSymbol(table, code);
+          },
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: TextFormField(
             controller: _commentCtrl,
+            focusNode: _commentFocus,
             decoration: const InputDecoration(
               labelText: 'Comment',
               border: OutlineInputBorder(),
@@ -487,12 +441,7 @@ class _MyStationSectionState extends State<_MyStationSection> {
               counterText: '',
             ),
             maxLength: 43,
-            onEditingComplete: () {
-              context.read<StationSettingsService>().setComment(
-                _commentCtrl.text,
-              );
-              FocusScope.of(context).unfocus();
-            },
+            onEditingComplete: () => FocusScope.of(context).unfocus(),
             onChanged: (v) => setState(() {}),
             buildCounter:
                 (_, {required currentLength, required isFocused, maxLength}) {
@@ -508,11 +457,222 @@ class _MyStationSectionState extends State<_MyStationSection> {
       ],
     );
   }
+}
 
-  void _saveSymbol(BuildContext context) {
-    context.read<StationSettingsService>().setSymbol(
-      _symbolTableCtrl.text.isEmpty ? '/' : _symbolTableCtrl.text,
-      _symbolCodeCtrl.text.isEmpty ? '>' : _symbolCodeCtrl.text,
+// ---------------------------------------------------------------------------
+// Symbol picker
+// ---------------------------------------------------------------------------
+
+/// A curated list of common APRS symbols with human-readable names.
+class _AprsSymbolEntry {
+  const _AprsSymbolEntry(this.table, this.code, this.name);
+
+  final String table;
+  final String code;
+  final String name;
+}
+
+const _kAprsSymbols = <_AprsSymbolEntry>[
+  _AprsSymbolEntry('/', '>', 'Car'),
+  _AprsSymbolEntry('/', '-', 'House'),
+  _AprsSymbolEntry('/', '[', 'Person / Runner'),
+  _AprsSymbolEntry('/', '<', 'Motorcycle'),
+  _AprsSymbolEntry('/', 'b', 'Bicycle'),
+  _AprsSymbolEntry('/', 'k', 'Truck'),
+  _AprsSymbolEntry('/', 'u', 'Semi Truck'),
+  _AprsSymbolEntry('/', 'U', 'Bus'),
+  _AprsSymbolEntry('/', 'j', 'Jeep'),
+  _AprsSymbolEntry('/', 'v', 'Van'),
+  _AprsSymbolEntry('/', 'X', 'Helicopter'),
+  _AprsSymbolEntry('/', '^', 'Aircraft'),
+  _AprsSymbolEntry('/', "'", 'Small Aircraft'),
+  _AprsSymbolEntry('/', 'O', 'Balloon'),
+  _AprsSymbolEntry('/', 'Y', 'Sailboat'),
+  _AprsSymbolEntry('/', 's', 'Powerboat'),
+  _AprsSymbolEntry('/', '_', 'Weather Station'),
+  _AprsSymbolEntry('/', '#', 'Digipeater'),
+  _AprsSymbolEntry('/', 'r', 'Repeater Tower'),
+  _AprsSymbolEntry('/', 'a', 'Ambulance'),
+  _AprsSymbolEntry('/', 'h', 'Hospital'),
+  _AprsSymbolEntry('/', 'f', 'Fire Truck'),
+  _AprsSymbolEntry('/', 'd', 'Fire Department'),
+  _AprsSymbolEntry('/', 'P', 'Police'),
+  _AprsSymbolEntry('/', '!', 'Emergency'),
+  _AprsSymbolEntry('/', '+', 'Red Cross'),
+  _AprsSymbolEntry('/', '@', 'Hurricane'),
+  _AprsSymbolEntry('/', 'R', 'Recreational Vehicle'),
+  _AprsSymbolEntry('/', 'n', 'Network Node'),
+  _AprsSymbolEntry('/', '&', 'Gateway'),
+  _AprsSymbolEntry('/', '\$', 'Phone'),
+  _AprsSymbolEntry('\\', '-', 'House (overlay)'),
+  _AprsSymbolEntry('\\', '>', 'Car (overlay)'),
+  _AprsSymbolEntry('\\', '[', 'Person (overlay)'),
+];
+
+String _symbolName(String table, String code) {
+  for (final s in _kAprsSymbols) {
+    if (s.table == table && s.code == code) return s.name;
+  }
+  return 'Custom ($table$code)';
+}
+
+/// ListTile that shows the current symbol and opens a searchable picker dialog.
+class _SymbolPickerTile extends StatelessWidget {
+  const _SymbolPickerTile({
+    required this.symbolTable,
+    required this.symbolCode,
+    required this.onChanged,
+  });
+
+  final String symbolTable;
+  final String symbolCode;
+  final void Function(String table, String code) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      leading: Icon(
+        AprsSymbolWidget.iconDataForSymbol(symbolTable, symbolCode),
+        color: theme.colorScheme.primary,
+        size: 28,
+      ),
+      title: const Text('Symbol'),
+      subtitle: Text(_symbolName(symbolTable, symbolCode)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () async {
+        final result = await showDialog<_AprsSymbolEntry>(
+          context: context,
+          builder: (_) => _SymbolPickerDialog(
+            currentTable: symbolTable,
+            currentCode: symbolCode,
+          ),
+        );
+        if (result != null) {
+          onChanged(result.table, result.code);
+        }
+      },
+    );
+  }
+}
+
+class _SymbolPickerDialog extends StatefulWidget {
+  const _SymbolPickerDialog({
+    required this.currentTable,
+    required this.currentCode,
+  });
+
+  final String currentTable;
+  final String currentCode;
+
+  @override
+  State<_SymbolPickerDialog> createState() => _SymbolPickerDialogState();
+}
+
+class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
+  final _searchCtrl = TextEditingController();
+  List<_AprsSymbolEntry> _filtered = _kAprsSymbols;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch(String query) {
+    final q = query.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _kAprsSymbols
+          : _kAprsSymbols
+                .where((s) => s.name.toLowerCase().contains(q))
+                .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text('Choose Symbol', style: theme.textTheme.titleMedium),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Search…',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              onChanged: _onSearch,
+            ),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 380),
+            child: _filtered.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('No symbols found.'),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _filtered.length,
+                    itemBuilder: (context, index) {
+                      final entry = _filtered[index];
+                      final isSelected =
+                          entry.table == widget.currentTable &&
+                          entry.code == widget.currentCode;
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          AprsSymbolWidget.iconDataForSymbol(
+                            entry.table,
+                            entry.code,
+                          ),
+                          color: isSelected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        title: Text(entry.name),
+                        subtitle: Text(
+                          '${entry.table}${entry.code}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontFamily: 'monospace',
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                        selected: isSelected,
+                        selectedTileColor: theme.colorScheme.primaryContainer
+                            .withValues(alpha: 0.3),
+                        onTap: () => Navigator.of(context).pop(entry),
+                      );
+                    },
+                  ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

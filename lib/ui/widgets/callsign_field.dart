@@ -11,11 +11,13 @@ class CallsignField extends StatelessWidget {
   const CallsignField({
     super.key,
     required this.controller,
+    this.focusNode,
     this.onChanged,
     this.label = 'Callsign',
   });
 
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final ValueChanged<String>? onChanged;
   final String label;
 
@@ -38,6 +40,7 @@ class CallsignField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       validator: _validate,
       onChanged: onChanged,

@@ -59,6 +59,12 @@ class AprsIsTransport implements AprsTransport {
     _emitState(ConnectionStatus.connecting);
     try {
       _socket = await Socket.connect(host, port);
+      // Socket also implements IOSink, whose .done future completes with the
+      // same SocketException when the OS aborts the connection (e.g. Android
+      // kills TCP sockets on screen lock). Our stream listener's onError
+      // already handles state updates; ignoring .done prevents the same error
+      // from also reaching the zone as an unhandled exception.
+      _socket!.done.ignore();
       _socket!.write(loginLine);
       if (filterLine != null) _socket!.write(filterLine);
       _emitState(ConnectionStatus.connected);
@@ -72,12 +78,19 @@ class AprsIsTransport implements AprsTransport {
               if (!_controller.isClosed) _controller.add(line);
             },
             onError: (Object e) {
-              // Connection dropped with an error. Update state; do NOT
+              // Connection dropped with an error (e.g. ECONNABORTED when the
+              // OS kills the socket in the background). Update state and clear
+              // the dead socket reference so that subsequent sendLine() calls
+              // are no-ops rather than throwing on the dead socket. Do NOT
               // propagate the error onto _controller — unhandled broadcast
               // errors crash the app. The caller observes the state change.
+              _socket = null;
+              _socketSubscription = null;
               _emitState(ConnectionStatus.disconnected);
             },
             onDone: () {
+              _socket = null;
+              _socketSubscription = null;
               _emitState(ConnectionStatus.disconnected);
             },
             cancelOnError: true,
@@ -89,7 +102,15 @@ class AprsIsTransport implements AprsTransport {
   }
 
   @override
-  void sendLine(String line) => _socket?.write(line);
+  void sendLine(String line) {
+    try {
+      _socket?.write(line);
+    } on SocketException {
+      // Socket died between the null-check and the write (race between OS
+      // abort and our null-out in onError). Safe to discard — the onError
+      // handler will fire separately and update the connection state.
+    }
+  }
 
   @override
   Future<void> disconnect() async {

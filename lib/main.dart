@@ -8,6 +8,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/packet/aprs_packet.dart' show PacketSource;
 import 'core/transport/aprs_is_transport.dart';
 import 'screens/map_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
@@ -69,7 +70,12 @@ Future<void> main() async {
   final txService = TxService(transport, tncService);
   await txService.loadPersistedPreference();
 
-  final beaconingService = BeaconingService(stationSettings, txService);
+  final beaconingService = BeaconingService(
+    stationSettings,
+    txService,
+    onBeaconSent: (line) =>
+        service.ingestLine(line, source: PacketSource.aprsIs),
+  );
   await beaconingService.loadPersistedSettings();
 
   final messageService = MessageService(stationSettings, txService, service);

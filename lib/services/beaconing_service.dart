@@ -38,10 +38,17 @@ enum BeaconError {
 }
 
 class BeaconingService extends ChangeNotifier {
-  BeaconingService(this._settings, this._tx);
+  BeaconingService(this._settings, this._tx, {this.onBeaconSent});
 
   final StationSettingsService _settings;
   final TxService _tx;
+
+  /// Called after every successful beacon with the raw APRS-IS line.
+  ///
+  /// Wire this to [StationService.ingestLine] so the user's own station
+  /// appears on the map immediately without waiting for APRS-IS to echo back
+  /// (which it never does for packets originating from the same connection).
+  final void Function(String line)? onBeaconSent;
 
   static const _keyMode = 'beacon_mode';
   static const _keyInterval = 'beacon_interval_s';
@@ -198,6 +205,7 @@ class BeaconingService extends ChangeNotifier {
     );
 
     await _tx.sendLine(aprsLine);
+    onBeaconSent?.call(aprsLine);
     _lastBeaconAt = DateTime.now();
 
     if (_isActive) await _restartTimer();
