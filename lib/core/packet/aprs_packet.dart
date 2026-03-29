@@ -120,6 +120,9 @@ class WeatherPacket extends AprsPacket {
   /// Rainfall in the last 24 hours, in hundredths of an inch.
   final double? rainfall24h;
 
+  /// Rainfall since midnight, in hundredths of an inch (APRS field `P`).
+  final double? rainSinceMidnight;
+
   const WeatherPacket({
     required super.rawLine,
     required super.source,
@@ -139,6 +142,7 @@ class WeatherPacket extends AprsPacket {
     this.windGust,
     this.rainfall1h,
     this.rainfall24h,
+    this.rainSinceMidnight,
   });
 }
 
@@ -158,6 +162,17 @@ class MessagePacket extends AprsPacket {
   /// Optional message ID (the `{NNN}` suffix), null if absent.
   final String? messageId;
 
+  /// True when this packet is an ACK (message text starts with `ack`).
+  ///
+  /// When true, [messageId] contains the wire ID being acknowledged, and
+  /// [message] is the full text (`ack` + ID) for informational purposes.
+  final bool isAck;
+
+  /// True when this packet is a REJ (message text starts with `rej`).
+  ///
+  /// When true, [messageId] contains the wire ID being rejected.
+  final bool isRej;
+
   const MessagePacket({
     required super.rawLine,
     required super.source,
@@ -168,6 +183,8 @@ class MessagePacket extends AprsPacket {
     required this.addressee,
     required this.message,
     this.messageId,
+    this.isAck = false,
+    this.isRej = false,
   });
 }
 

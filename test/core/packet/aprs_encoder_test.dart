@@ -83,9 +83,53 @@ void main() {
       expect(line, contains('S'));
       expect(line, contains('E'));
     });
+
+    // M6: Coordinate range asserts
+    test('assert fires for lat out of range', () {
+      expect(
+        () => AprsEncoder.encodePosition(
+          callsign: 'W1AW',
+          ssid: 0,
+          lat: 91.0, // invalid
+          lon: 0.0,
+          symbolTable: '/',
+          symbolCode: '>',
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('assert fires for lon out of range', () {
+      expect(
+        () => AprsEncoder.encodePosition(
+          callsign: 'W1AW',
+          ssid: 0,
+          lat: 0.0,
+          lon: 181.0, // invalid
+          symbolTable: '/',
+          symbolCode: '>',
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
   });
 
   group('AprsEncoder.encodeMessage', () {
+    test('includes TCPIP* path for APRS-IS', () {
+      final line = AprsEncoder.encodeMessage(
+        fromCallsign: 'W1AW',
+        fromSsid: 9,
+        toCallsign: 'WB4APR',
+        text: 'Hello',
+        messageId: '001',
+      );
+      expect(
+        line,
+        contains(',TCPIP*:'),
+        reason: 'encodeMessage must include TCPIP* path for APRS-IS ingestion',
+      );
+    });
+
     test('pads addressee to 9 characters', () {
       final line = AprsEncoder.encodeMessage(
         fromCallsign: 'W1AW',
@@ -156,6 +200,20 @@ void main() {
       );
       expect(line, contains(':WB4APR   :ack001'));
     });
+
+    test('includes TCPIP* path for APRS-IS', () {
+      final line = AprsEncoder.encodeAck(
+        fromCallsign: 'W1AW',
+        fromSsid: 9,
+        toCallsign: 'WB4APR',
+        messageId: '001',
+      );
+      expect(
+        line,
+        contains(',TCPIP*:'),
+        reason: 'encodeAck must include TCPIP* path for APRS-IS ingestion',
+      );
+    });
   });
 
   group('AprsEncoder.encodeRej', () {
@@ -167,6 +225,20 @@ void main() {
         messageId: '007',
       );
       expect(line, contains(':WB4APR   :rej007'));
+    });
+
+    test('includes TCPIP* path for APRS-IS', () {
+      final line = AprsEncoder.encodeRej(
+        fromCallsign: 'W1AW',
+        fromSsid: 0,
+        toCallsign: 'WB4APR',
+        messageId: '007',
+      );
+      expect(
+        line,
+        contains(',TCPIP*:'),
+        reason: 'encodeRej must include TCPIP* path for APRS-IS ingestion',
+      );
     });
   });
 }

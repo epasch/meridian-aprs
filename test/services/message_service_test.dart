@@ -169,6 +169,40 @@ void main() {
       expect(conv, isNotNull);
       expect(conv!.messages.first.status, equals(MessageStatus.pending));
     });
+
+    test(
+      'inbound ACK packet (parser isAck=true) marks message acked',
+      () async {
+        final f = await _Fixture.create(initialCounter: 0);
+        // Send a message so there is an outgoing entry with wireId '001'.
+        await f.service.sendMessage('KB1XYZ', 'Hello');
+        // Inject the ACK packet from the remote station via station service.
+        // Parser will set isAck=true and messageId='001' on the MessagePacket.
+        f.stationService.ingestLine('KB1XYZ>APZMDN::W1AW-9   :ack001');
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        final conv = f.service.conversationWith('KB1XYZ');
+        expect(conv, isNotNull);
+        final outgoing = conv!.messages.firstWhere((m) => m.isOutgoing);
+        expect(outgoing.status, equals(MessageStatus.acked));
+      },
+    );
+
+    test(
+      'inbound REJ packet (parser isRej=true) marks message rejected',
+      () async {
+        final f = await _Fixture.create(initialCounter: 0);
+        await f.service.sendMessage('KB1XYZ', 'Hello');
+        // Inject the REJ packet.
+        f.stationService.ingestLine('KB1XYZ>APZMDN::W1AW-9   :rej001');
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        final conv = f.service.conversationWith('KB1XYZ');
+        expect(conv, isNotNull);
+        final outgoing = conv!.messages.firstWhere((m) => m.isOutgoing);
+        expect(outgoing.status, equals(MessageStatus.rejected));
+      },
+    );
   });
 
   // --- Duplicate detection ------------------------------------------------

@@ -82,7 +82,7 @@ class Ax25Encoder {
     for (var i = 0; i < allAddresses.length; i++) {
       final addr = allAddresses[i];
       final isLast = i == allAddresses.length - 1;
-      _encodeAddress(buf, addr, isLast: isLast, isSource: i == 1);
+      _encodeAddress(buf, addr, isLast: isLast, isDestination: i == 0);
     }
 
     buf.add(frame.control);
@@ -101,19 +101,18 @@ class Ax25Encoder {
   /// AX.25 address field layout (7 bytes per address):
   /// - Bytes 0–5: ASCII callsign characters, each shifted left by 1 bit,
   ///   space-padded to 6 characters.
-  /// - Byte 6 (SSID byte): `H|RR|SSID|END`
-  ///   - bit 7 (H): has-been-repeated flag (always 0 for new frames)
+  /// - Byte 6 (SSID byte): `C/H|RR|SSID|END`
+  ///   - bit 7 (C/H): C-bit = 1 for destination (command frame); H-bit = 0
+  ///     for source and all digipeaters on a newly transmitted frame
+  ///     (AX.25 v2.2 §3.12.4).
   ///   - bits 6–5 (RR): reserved, set to 1
   ///   - bits 4–1 (SSID): SSID value 0–15
   ///   - bit 0 (END): 1 if this is the last address in the list
-  ///
-  /// The C-bit (bit 7 in some references) is encoded in the SSID byte:
-  /// for the destination it is set (command frame), for source it is clear.
   static void _encodeAddress(
     List<int> buf,
     Ax25Address addr, {
     required bool isLast,
-    required bool isSource,
+    required bool isDestination,
   }) {
     // Pad or truncate callsign to 6 ASCII characters.
     final cs = addr.callsign.toUpperCase().padRight(6).substring(0, 6);
@@ -122,11 +121,12 @@ class Ax25Encoder {
     }
 
     // SSID byte:
-    //   bit 7: C-bit — 1 for destination (command), 0 for source / digi
+    //   bit 7: C-bit — 1 for destination (command), 0 for source and digis.
+    //           Digipeater H-bit must also be 0 on a newly transmitted frame.
     //   bits 6–5: reserved, both set to 1
     //   bits 4–1: SSID nibble
     //   bit 0: end-of-address-list
-    final cBit = isSource ? 0 : 0x80;
+    final cBit = isDestination ? 0x80 : 0x00;
     final reserved = 0x60; // bits 6 and 5 always 1
     final ssidBits = (addr.ssid & 0x0F) << 1;
     final endBit = isLast ? 0x01 : 0x00;

@@ -267,31 +267,26 @@ class MessageService extends ChangeNotifier {
     final myAddress = _settings.fullAddress.toUpperCase();
 
     // Only process packets addressed to this station.
-    if (packet.addressee.toUpperCase() != myAddress) return;
+    if (packet.addressee.toUpperCase() != myAddress) {
+      debugPrint(
+        'MessageService: dropped packet — addressee="${packet.addressee.toUpperCase()}" '
+        'myAddress="$myAddress"',
+      );
+      return;
+    }
 
     final source = packet.source.trim().toUpperCase();
     final text = packet.message;
     final wireId = packet.messageId;
 
-    // Detect ACK: message text starts with "ack".
-    if (text.toLowerCase().startsWith('ack') && wireId == null) {
-      final ackId = text.substring(3).trim();
-      _handleAck(source, ackId);
+    // ACK/REJ detection is done in the parser (MessagePacket.isAck / isRej).
+    if (packet.isAck) {
+      debugPrint('MessageService: inbound ACK from=$source id=$wireId');
+      _handleAck(source, wireId ?? '');
       return;
     }
-
-    // Detect ACK with no text (rare spec variant).
-    if (text.toLowerCase() == 'ack' ||
-        (wireId != null && text.toLowerCase().startsWith('ack'))) {
-      final ackId = wireId ?? text.substring(3).trim();
-      _handleAck(source, ackId);
-      return;
-    }
-
-    // Detect REJ.
-    if (text.toLowerCase().startsWith('rej')) {
-      final rejId = text.length > 3 ? text.substring(3).trim() : (wireId ?? '');
-      _handleRej(source, rejId);
+    if (packet.isRej) {
+      _handleRej(source, wireId ?? '');
       return;
     }
 
@@ -324,19 +319,36 @@ class MessageService extends ChangeNotifier {
 
   void _handleAck(String peer, String ackId) {
     final ackKey = '$peer:$ackId';
-    if (_seenAcks.contains(ackKey)) return;
+    if (_seenAcks.contains(ackKey)) {
+      debugPrint('MessageService: ACK deduped peer=$peer id=$ackId');
+      return;
+    }
     _seenAcks.add(ackKey);
 
     final conv = _conversations[peer];
-    if (conv == null) return;
+    if (conv == null) {
+      debugPrint(
+        'MessageService: ACK no conversation — peer=$peer '
+        'known=${_conversations.keys.toList()}',
+      );
+      return;
+    }
 
+    var matched = false;
     for (final entry in conv.messages) {
       if (entry.isOutgoing && entry.wireId == ackId) {
         _retryTimers[entry.localId]?.cancel();
         _retryTimers.remove(entry.localId);
         entry.status = MessageStatus.acked;
+        matched = true;
         break;
       }
+    }
+    if (!matched) {
+      debugPrint(
+        'MessageService: ACK no matching entry — peer=$peer id=$ackId '
+        'outgoing wireIds=${conv.messages.where((e) => e.isOutgoing).map((e) => e.wireId).toList()}',
+      );
     }
     notifyListeners();
     _persist(); // ignore: unawaited_futures

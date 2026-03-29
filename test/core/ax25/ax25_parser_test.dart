@@ -9,7 +9,8 @@ import 'package:meridian_aprs/core/ax25/ax25_parser.dart';
 /// Encode a callsign + SSID into the 7-byte AX.25 address field format.
 ///
 /// Each character byte is left-shifted by 1. The SSID byte encodes:
-///   bit 5   — H-bit (has-been-repeated)
+///   bit 7   — H-bit (has-been-repeated) per AX.25 v2.2 §3.12.4
+///   bits 6-5 — reserved (set to 1)
 ///   bits 4-1 — SSID (0–15)
 ///   bit 0   — extension bit (0 = more addresses follow, 1 = last address)
 List<int> encodeAddr(
@@ -23,7 +24,12 @@ List<int> encodeAddr(
   for (int i = 0; i < 6; i++) {
     bytes[i] = padded.codeUnitAt(i) << 1;
   }
-  bytes[6] = (hBit ? 0x20 : 0x00) | ((ssid & 0x0F) << 1) | (last ? 0x01 : 0x00);
+  // H-bit is bit 7 (AX.25 v2.2 §3.12.4); bits 6-5 are reserved and set to 1.
+  bytes[6] =
+      (hBit ? 0x80 : 0x00) |
+      0x60 | // reserved bits always 1
+      ((ssid & 0x0F) << 1) |
+      (last ? 0x01 : 0x00);
   return bytes;
 }
 
@@ -205,6 +211,48 @@ void main() {
       final result = parser.parseFrame(raw);
       expect(result, isA<Ax25Err>());
       expect((result as Ax25Err).reason, contains('Not a UI/APRS frame'));
+    });
+
+    // -------------------------------------------------------------------------
+    // B1: H-bit must be extracted from bit 7 of the SSID byte
+    // -------------------------------------------------------------------------
+
+    test('H-bit is read from bit 7 of SSID byte (AX.25 v2.2 §3.12.4)', () {
+      // Build a frame where the digipeater's SSID byte has bit 7 set (H-bit).
+      // encodeAddr with hBit: true sets bit 7.
+      final dstBytes = encodeAddr('APRS', 0);
+      final srcBytes = encodeAddr('W1AW', 0);
+      // Digipeater with H-bit set at bit 7, marked as last address.
+      final digiBytes = encodeAddr('RELAY', 0, hBit: true, last: true);
+      final raw = Uint8List.fromList([
+        ...dstBytes,
+        ...srcBytes,
+        ...digiBytes,
+        0x03, 0xF0, // control + PID
+        0x21, // info: '!'
+      ]);
+
+      final result = parser.parseFrame(raw);
+      expect(result, isA<Ax25Ok>());
+      final frame = (result as Ax25Ok).frame;
+      expect(frame.digipeaters, hasLength(1));
+      expect(
+        frame.digipeaters[0].hBit,
+        isTrue,
+        reason: 'H-bit should be true when bit 7 of SSID byte is set',
+      );
+    });
+
+    test('H-bit is false when bit 7 of SSID byte is clear', () {
+      final raw = buildFrame(dst: 'APRS', src: 'W1AW', digis: ['WIDE1']);
+      final result = parser.parseFrame(raw);
+      expect(result, isA<Ax25Ok>());
+      final frame = (result as Ax25Ok).frame;
+      expect(
+        frame.digipeaters[0].hBit,
+        isFalse,
+        reason: 'H-bit should be false when bit 7 of SSID byte is clear',
+      );
     });
   });
 }

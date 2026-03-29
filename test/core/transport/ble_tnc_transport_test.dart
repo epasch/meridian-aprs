@@ -70,10 +70,7 @@ class FakeBleDeviceAdapter implements BleDeviceAdapter {
   int get mtu => fakeMtu;
 
   @override
-  Future<void> connect({
-    int? mtu,
-    Duration timeout = const Duration(seconds: 15),
-  }) async {
+  Future<void> connect({Duration timeout = const Duration(seconds: 15)}) async {
     connectCallCount++;
     if (connectThrows) throw Exception('FakeBleDeviceAdapter: connect failed');
   }

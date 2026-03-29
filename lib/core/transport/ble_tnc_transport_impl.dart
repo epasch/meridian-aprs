@@ -20,7 +20,7 @@ import 'kiss_tnc_transport.dart';
 ///
 /// Production code uses [DefaultBleDeviceAdapter]. Tests inject a fake.
 abstract interface class BleDeviceAdapter {
-  Future<void> connect({int? mtu, Duration timeout});
+  Future<void> connect({Duration timeout});
   Future<void> disconnect();
   Future<int> requestMtu(int desired);
   int get mtu;
@@ -36,10 +36,8 @@ class DefaultBleDeviceAdapter implements BleDeviceAdapter {
   final BluetoothDevice _device;
 
   @override
-  Future<void> connect({
-    int? mtu,
-    Duration timeout = const Duration(seconds: 15),
-  }) => _device.connect(mtu: mtu, timeout: timeout, autoConnect: false);
+  Future<void> connect({Duration timeout = const Duration(seconds: 15)}) =>
+      _device.connect(timeout: timeout, autoConnect: false);
 
   @override
   Future<void> disconnect() => _device.disconnect();
@@ -99,6 +97,12 @@ class BleTncTransport implements KissTncTransport {
   // Effective MTU for outgoing chunk size (payload bytes, not ATT frame size).
   int _mtu = 20;
 
+  // Keepalive: reset on every write; fires if the link is idle for too long.
+  // Mobilinkd (and most BLE TNCs) drop the connection after ~5 s of silence.
+  // 2 s gives comfortable headroom below the 5.12 s supervision timeout.
+  static const _keepaliveInterval = Duration(seconds: 2);
+  Timer? _keepaliveTimer;
+
   final _kissFramer = KissFramer();
   StreamSubscription<Uint8List>? _framesSub;
   StreamSubscription<List<int>>? _notifySub;
@@ -128,13 +132,12 @@ class BleTncTransport implements KissTncTransport {
     _setStatus(ConnectionStatus.connecting);
     try {
       // 1. Connect to the device.
-      await _adapter.connect(
-        mtu: 512, // Android: negotiate MTU during connect. No-op on iOS.
-        timeout: const Duration(seconds: 15),
-      );
+      await _adapter.connect(timeout: const Duration(seconds: 15));
 
-      // 2. On iOS the MTU is negotiated by CoreBluetooth automatically.
-      //    On other platforms, request explicitly after connect.
+      // 2. Request MTU explicitly to read back the negotiated value.
+      //    Note: flutter_blue_plus on Android also issues an internal
+      //    requestMtu during connect; this second call is harmless and gives
+      //    us the same negotiated result to compute chunk size.
       try {
         final negotiated = await _adapter.requestMtu(512);
         // ATT overhead is 3 bytes; subtract to get usable payload bytes.
@@ -204,6 +207,17 @@ class BleTncTransport implements KissTncTransport {
       _connStateSub = _adapter.connectionState.listen(_onBleConnectionState);
 
       _setStatus(ConnectionStatus.connected);
+
+      // 9. Send the standard KISS parameter initialisation sequence and start
+      //    the idle keepalive timer.
+      //    Mobilinkd (and most BLE TNCs) will drop the link after a few seconds
+      //    of post-connect silence. Sending the five standard KISS commands
+      //    immediately resets the TNC idle timer. All five frames are packed
+      //    into one BLE write (20 bytes) to minimise round-trips.
+      //    DO NOT use command 0x06 (SETHARDWARE) — that is Mobilinkd's
+      //    proprietary config protocol and causes an immediate disconnect.
+      await _sendKissInit();
+      _resetKeepalive();
     } catch (e) {
       debugPrint('BleTncTransport connect failed: $e');
       _setStatus(ConnectionStatus.error);
@@ -219,6 +233,8 @@ class BleTncTransport implements KissTncTransport {
   @override
   Future<void> disconnect() async {
     if (_status == ConnectionStatus.disconnected) return;
+    _keepaliveTimer?.cancel();
+    _keepaliveTimer = null;
     _setStatus(ConnectionStatus.disconnected);
     await _cleanupSubscriptions();
     try {
@@ -238,6 +254,7 @@ class BleTncTransport implements KissTncTransport {
     if (rxChar == null || !isConnected) {
       throw StateError('BleTncTransport: not connected');
     }
+    _keepaliveTimer?.cancel();
     final kissFrame = KissFramer.encode(ax25Frame);
     // Split into MTU-sized chunks and write sequentially with response.
     int offset = 0;
@@ -247,6 +264,7 @@ class BleTncTransport implements KissTncTransport {
       await rxChar.write(chunk, withoutResponse: false);
       offset = end;
     }
+    _resetKeepalive();
   }
 
   // ---------------------------------------------------------------------------
@@ -270,12 +288,67 @@ class BleTncTransport implements KissTncTransport {
   }
 
   Future<void> _cleanupSubscriptions() async {
+    _keepaliveTimer?.cancel();
+    _keepaliveTimer = null;
     await _notifySub?.cancel();
     _notifySub = null;
     await _connStateSub?.cancel();
     _connStateSub = null;
     await _framesSub?.cancel();
     _framesSub = null;
+  }
+
+  /// Sends the five standard KISS parameter frames in a single BLE write.
+  ///
+  /// Frame layout: FEND CMD VALUE FEND (4 bytes each, 20 bytes total).
+  ///   0x01 TXDELAY   – 30 × 10 ms = 300 ms
+  ///   0x02 PERSIST   – 63  (standard CSMA)
+  ///   0x03 SLOTTIME  – 10 × 10 ms = 100 ms
+  ///   0x04 TXTAIL    – 0 ms
+  ///   0x05 FULLDUPLEX – off (CSMA mode)
+  Future<void> _sendKissInit() async {
+    try {
+      await _rxChar?.write(
+        Uint8List.fromList([
+          0xC0, 0x01, 30, 0xC0, // TXDELAY  300 ms
+          0xC0, 0x02, 63, 0xC0, // PERSIST
+          0xC0, 0x03, 10, 0xC0, // SLOTTIME 100 ms
+          0xC0, 0x04, 0, 0xC0, // TXTAIL     0 ms
+          0xC0, 0x05, 0, 0xC0, // FULLDUPLEX off
+        ]),
+        withoutResponse: false,
+      );
+    } catch (_) {
+      // Best-effort — TNC will still operate without the init sequence.
+    }
+  }
+
+  /// Cancels any pending keepalive and schedules a new one.
+  ///
+  /// Call after every outbound write so the timer only fires during genuine
+  /// silence. When real APRS traffic is flowing the timer is continuously
+  /// reset and never actually fires.
+  void _resetKeepalive() {
+    _keepaliveTimer?.cancel();
+    if (!isConnected) return;
+    _keepaliveTimer = Timer(_keepaliveInterval, _onKeepalive);
+  }
+
+  /// Fires when the link has been idle for [_keepaliveInterval].
+  ///
+  /// Sends a single KISS TXDELAY frame — harmless to any KISS TNC and
+  /// sufficient to reset the Mobilinkd idle timer.
+  Future<void> _onKeepalive() async {
+    if (!isConnected) return;
+    try {
+      await _rxChar?.write(
+        Uint8List.fromList([0xC0, 0x01, 30, 0xC0]),
+        withoutResponse: false,
+      );
+    } catch (_) {
+      // Best-effort — if the write fails the link is already dropping.
+    }
+    _resetKeepalive();
   }
 
   void _setStatus(ConnectionStatus status) {

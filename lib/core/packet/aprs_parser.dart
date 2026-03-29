@@ -6,6 +6,18 @@ import '../ax25/ax25_parser.dart';
 import 'aprs_packet.dart';
 import 'device_resolver.dart';
 
+/// Decoded csT (course/speed/altitude) triplet from a compressed position.
+///
+/// [comment] is the remaining info string after the three csT bytes have been
+/// consumed.  All numeric fields are null when not present or not applicable.
+class _CsT {
+  const _CsT({this.course, this.speed, this.altitude, required this.comment});
+  final int? course;
+  final double? speed;
+  final double? altitude;
+  final String comment;
+}
+
 /// Full APRS packet parser.
 ///
 /// [parse] accepts an APRS-IS text line and returns a typed [AprsPacket].
@@ -132,7 +144,10 @@ class AprsParser {
       );
     }
     final frame = (result as Ax25Ok).frame;
-    final infoStr = latin1.decode(frame.info);
+    // Strip trailing CR/LF that some TNCs (e.g. Mobilinkd, Direwolf) append to
+    // the AX.25 info field.  Without this, message IDs like '003\r' never match
+    // outgoing wireIds and ACK handling silently fails.
+    final infoStr = latin1.decode(frame.info).trimRight();
     final pathStr = frame.pathString.isEmpty ? '' : ',${frame.pathString}';
     final reconstructed =
         '${frame.source}>${frame.destination}$pathStr:$infoStr';
@@ -296,8 +311,12 @@ class AprsParser {
   // Altitude: "/A=XXXXXX" anywhere in comment (feet).
   static final _altRe = RegExp(r'/A=(\d+)');
 
-  // DHM timestamp: DDHHMMz (UTC) or DDHHMMh (local — treated as UTC).
-  static final _dhmRe = RegExp(r'^(\d{2})(\d{2})(\d{2})[zh]$');
+  // DHM timestamp: DDHHMMz (UTC) or DDHMM/ (local variant, per Dire Wolf).
+  // The 'h' suffix is NOT a valid DHM suffix — it belongs to the HMS format.
+  static final _dhmRe = RegExp(r'^(\d{2})(\d{2})(\d{2})[z/]$');
+
+  // HMS timestamp: HHMMSSh — hour/minute/second (local, treated as UTC).
+  static final _hmsRe = RegExp(r'^(\d{2})(\d{2})(\d{2})h$');
 
   AprsPacket _parsePosition({
     required String info,
@@ -523,39 +542,12 @@ class AprsParser {
     final lat = 90.0 - latVal / 380926.0;
     final lon = -180.0 + lonVal / 190463.0;
 
-    // Optional cs bytes: remainder[0] = course byte, remainder[1] = speed byte,
-    // remainder[2] = compression-type byte.
-    int? course;
-    double? speed;
-    double? altitude;
-    String comment = remainder;
-    if (remainder.isNotEmpty && remainder.codeUnitAt(0) == 0x20) {
-      // Space c byte: csT bytes carry no data — skip them if present.
-      comment = remainder.length > 3 ? remainder.substring(3) : '';
-    } else if (remainder.length >= 3) {
-      final csType = remainder[2].codeUnitAt(0) - 33;
-      // Bits 4-5 of csType byte indicate what c and s represent.
-      // If bit 5 set: GGA altitude; if bits 4-5 = 01: course/speed.
-      final comprType = (csType >> 4) & 0x3;
-      if (comprType == 1) {
-        // course/speed
-        final cByte = remainder[0].codeUnitAt(0) - 33;
-        final sByte = remainder[1].codeUnitAt(0) - 33;
-        final c = cByte * 4; // degrees (0-360 encoded as 0-90 * 4)
-        // Spec: speed = 1.08^sByte - 1 knots.
-        if (cByte != 0 || sByte != 0) {
-          course = c == 360 ? 0 : c;
-          speed = pow(1.08, sByte).toDouble() - 1;
-        }
-        comment = remainder.length > 3 ? remainder.substring(3) : '';
-      } else if (comprType == 2) {
-        // GGA altitude: 1.002^(cByte*91 + sByte) feet (APRS 1.0.1 ch.9 p.40)
-        final cByte = remainder[0].codeUnitAt(0) - 33;
-        final sByte = remainder[1].codeUnitAt(0) - 33;
-        altitude = pow(1.002, cByte * 91 + sByte).toDouble();
-        comment = remainder.length > 3 ? remainder.substring(3) : '';
-      }
-    }
+    // Parse optional csT bytes (course/speed/altitude) via shared helper.
+    final cst = _parseCsT(remainder);
+    final int? course = cst.course;
+    final double? speed = cst.speed;
+    final double? altitude = cst.altitude;
+    final String comment = cst.comment;
 
     return PositionPacket(
       rawLine: rawLine,
@@ -576,6 +568,62 @@ class AprsParser {
       timestamp: packetTimestamp,
       device: DeviceResolver.resolve(tocall: destination),
     );
+  }
+
+  /// Parse the optional csT (course/speed/altitude) triplet from the
+  /// [remainder] string that follows the symbol code in a compressed position.
+  ///
+  /// Per APRS 1.0.1 ch.9 p.39–40:
+  ///   - c byte == 0x20 (space): csT bytes carry no data — skip 3 bytes.
+  ///   - c byte value (codeUnit - 33) in range 0–89: course/speed, unless the
+  ///     T byte indicates GGA source (bits 4–3 of T-33 == 2), in which case
+  ///     altitude interpretation takes priority.
+  ///   - c byte value == 90 (`{`): radio range — skip 3 bytes, no data.
+  ///   - T byte NMEA source (bits 4–3 of T-33) == 2 (GGA): altitude in feet
+  ///     = 1.002^(cByte * 91 + sByte).
+  ///
+  /// Returns a [_CsT] record with decoded values and the post-csT comment.
+  _CsT _parseCsT(String remainder) {
+    if (remainder.isEmpty) {
+      return _CsT(comment: '');
+    }
+    // Space c byte: csT bytes present but carry no data — skip 3 bytes.
+    if (remainder.codeUnitAt(0) == 0x20) {
+      return _CsT(comment: remainder.length > 3 ? remainder.substring(3) : '');
+    }
+    if (remainder.length >= 3) {
+      final cByte = remainder[0].codeUnitAt(0) - 33;
+      final sByte = remainder[1].codeUnitAt(0) - 33;
+      final tByte = remainder[2].codeUnitAt(0) - 33;
+      final afterCsT = remainder.length > 3 ? remainder.substring(3) : '';
+
+      // Radio range: c byte value == 90 (char '{'). Skip 3 bytes, no data.
+      if (cByte == 90) {
+        return _CsT(comment: afterCsT);
+      }
+
+      // GGA altitude takes priority when NMEA source bits 4–3 of T byte == 2.
+      // This is mutually exclusive with course/speed in practice.
+      final nmeasSource = (tByte >> 3) & 0x3;
+      if (nmeasSource == 2) {
+        // GGA altitude: 1.002^(cByte*91 + sByte) feet (APRS 1.0.1 ch.9 p.40).
+        final altitude = pow(1.002, cByte * 91 + sByte).toDouble();
+        return _CsT(altitude: altitude, comment: afterCsT);
+      }
+
+      // Course/speed: c byte value 0–89.
+      if (cByte >= 0 && cByte <= 89) {
+        final c = cByte * 4;
+        int? course;
+        double? speed;
+        if (cByte != 0 || sByte != 0) {
+          course = c == 360 ? 0 : c;
+          speed = pow(1.08, sByte).toDouble() - 1;
+        }
+        return _CsT(course: course, speed: speed, comment: afterCsT);
+      }
+    }
+    return _CsT(comment: remainder.length > 3 ? remainder.substring(3) : '');
   }
 
   /// Decode 4 base-91 characters to an integer value.
@@ -703,7 +751,7 @@ class AprsParser {
     final latChars = posStr.substring(1, 5);
     final lonChars = posStr.substring(5, 9);
     final symbolCode = posStr[9];
-    final comment = posStr.length > 10 ? posStr.substring(10) : '';
+    final remainder = posStr.length > 10 ? posStr.substring(10) : '';
 
     final latVal = _base91Decode4(latChars);
     final lonVal = _base91Decode4(lonChars);
@@ -719,6 +767,9 @@ class AprsParser {
       );
     }
 
+    // Parse csT bytes so they are not included in the comment.
+    final cst = _parseCsT(remainder);
+
     return ObjectPacket(
       rawLine: rawLine,
       source: source,
@@ -731,7 +782,7 @@ class AprsParser {
       lon: -180.0 + lonVal / 190463.0,
       symbolTable: symbolTable,
       symbolCode: symbolCode,
-      comment: comment,
+      comment: cst.comment,
       isAlive: isAlive,
       device: DeviceResolver.resolve(tocall: destination),
     );
@@ -856,12 +907,46 @@ class AprsParser {
     final addressee = info.substring(1, 10).trim();
     var messageText = info.substring(11);
 
-    // Extract optional message ID: '{NNN}' at end.
+    // Extract optional message ID: '{NNN' suffix (no closing brace per spec).
     String? messageId;
     final idIdx = messageText.lastIndexOf('{');
     if (idIdx >= 0) {
       messageId = messageText.substring(idIdx + 1);
       messageText = messageText.substring(0, idIdx);
+    }
+
+    // Detect ACK/REJ: per APRS spec §14, these are always lowercase 'ack'/'rej'.
+    // Case-sensitive match only — 'ACK' or 'REJ' in user text must not be
+    // misidentified as protocol control packets.
+    if (messageId == null && messageText.startsWith('ack')) {
+      final ackId = messageText.length > 3 ? messageText.substring(3) : '';
+      return MessagePacket(
+        rawLine: rawLine,
+        source: source,
+        destination: destination,
+        path: path,
+        receivedAt: receivedAt,
+        transportSource: transportSource,
+        addressee: addressee,
+        message: messageText,
+        messageId: ackId.isEmpty ? null : ackId,
+        isAck: true,
+      );
+    }
+    if (messageId == null && messageText.startsWith('rej')) {
+      final rejId = messageText.length > 3 ? messageText.substring(3) : '';
+      return MessagePacket(
+        rawLine: rawLine,
+        source: source,
+        destination: destination,
+        path: path,
+        receivedAt: receivedAt,
+        transportSource: transportSource,
+        addressee: addressee,
+        message: messageText,
+        messageId: rejId.isEmpty ? null : rejId,
+        isRej: true,
+      );
     }
 
     return MessagePacket(
@@ -909,6 +994,7 @@ class AprsParser {
     double? pressure;
     double? rainfall1h;
     double? rainfall24h;
+    double? rainSinceMidnight;
 
     for (final m in _weatherFieldRe.allMatches(weatherData)) {
       if (m.group(1) != null) {
@@ -923,6 +1009,9 @@ class AprsParser {
         rainfall1h = double.tryParse(m.group(5)!);
       } else if (m.group(6) != null) {
         rainfall24h = double.tryParse(m.group(6)!);
+      } else if (m.group(7) != null) {
+        // 'P' field: rainfall since midnight, in hundredths of an inch.
+        rainSinceMidnight = double.tryParse(m.group(7)!);
       } else if (m.group(8) != null) {
         humidity = int.tryParse(m.group(8)!);
       } else if (m.group(9) != null) {
@@ -946,6 +1035,7 @@ class AprsParser {
       windGust: windGust,
       rainfall1h: rainfall1h,
       rainfall24h: rainfall24h,
+      rainSinceMidnight: rainSinceMidnight,
     );
   }
 
@@ -1169,8 +1259,10 @@ class AprsParser {
     // Strip telemetry prefix / device-type prefix from the Mic-E comment.
     //
     // APRS 1.0.1 ch.10 p.54 defines two telemetry flag bytes:
-    //   0x60 (`) = 2-channel telemetry: flag + 4 printable hex digits → strip 5
-    //   0x27 (') = 5-channel telemetry: flag + 10 printable hex digits → strip 11
+    //   0x60 (`) = 2-channel telemetry: 1 flag byte + 4 hex chars (two 8-bit
+    //              channels encoded as 4 hex digits) = 5 bytes total to strip.
+    //   0x27 (') = 5-channel telemetry: 1 flag byte + 10 hex chars (five 8-bit
+    //              channels encoded as 10 hex digits) = 11 bytes total to strip.
     //
     // Crucially, the hex digits that follow MUST be [0-9a-fA-F]. When they are
     // not (e.g. the FT3DR uses backtick as a 1-byte device-type prefix followed
@@ -1319,16 +1411,16 @@ class AprsParser {
   ///
   /// Supported formats:
   ///   DDHHMMz — day/hour/minute UTC
-  ///   DDHHMMh — day/hour/minute local (treated as UTC)
-  ///   HHMMSSh — hour/minute/second
+  ///   DDHMM/  — day/hour/minute local (local variant, per Dire Wolf)
+  ///   HHMMSSh — hour/minute/second (local, treated as UTC)
   ///
   /// Returns null if the string does not match any known format.
   DateTime? _parseTimestamp(String ts, DateTime reference) {
     if (ts.length != 7) return null;
     final suffix = ts[6];
 
-    if (suffix == 'z' || suffix == 'h') {
-      // DDHHMMz or DDHHMMh
+    if (suffix == 'z' || suffix == '/') {
+      // DDHHMMz (UTC) or DDHMM/ (local variant, Dire Wolf)
       final m = _dhmRe.firstMatch(ts);
       if (m != null) {
         final day = int.tryParse(m.group(1)!);
@@ -1336,14 +1428,33 @@ class AprsParser {
         final minute = int.tryParse(m.group(3)!);
         if (day != null && hour != null && minute != null) {
           // Construct a DateTime using reference year/month; handle day rollover.
-          final dt = DateTime.utc(
+          return DateTime.utc(
             reference.year,
             reference.month,
             day,
             hour,
             minute,
           );
-          return dt;
+        }
+      }
+    }
+
+    if (suffix == 'h') {
+      // HHMMSSh — hour/minute/second (local time, treated as UTC for simplicity)
+      final m = _hmsRe.firstMatch(ts);
+      if (m != null) {
+        final hour = int.tryParse(m.group(1)!);
+        final minute = int.tryParse(m.group(2)!);
+        final second = int.tryParse(m.group(3)!);
+        if (hour != null && minute != null && second != null) {
+          return DateTime.utc(
+            reference.year,
+            reference.month,
+            reference.day,
+            hour,
+            minute,
+            second,
+          );
         }
       }
     }

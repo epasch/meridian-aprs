@@ -5,8 +5,11 @@
 /// construct outgoing packets before they are dispatched via [TxService].
 library;
 
-/// Encodes APRS packets to the wire text format used on APRS-IS and in the
-/// info field of AX.25 UI frames.
+/// Encodes APRS packets as APRS-IS text lines.
+///
+/// All output includes `TCPIP*` in the path per the APRS-IS connecting spec.
+/// This encoder produces APRS-IS–only output and must not be used to generate
+/// frames transmitted over RF; use [Ax25Encoder] for RF paths.
 class AprsEncoder {
   AprsEncoder._();
 
@@ -37,6 +40,8 @@ class AprsEncoder {
     String comment = '',
     bool hasMessaging = true,
   }) {
+    assert(lat >= -90 && lat <= 90, 'lat must be in [-90, 90], got $lat');
+    assert(lon >= -180 && lon <= 180, 'lon must be in [-180, 180], got $lon');
     final src = _formatAddress(callsign, ssid);
     final dti = hasMessaging ? '=' : '!';
     final latStr = _encodeLat(lat);
@@ -51,7 +56,7 @@ class AprsEncoder {
   /// Encodes an APRS message packet (APRS spec §14).
   ///
   /// Returns a full APRS-IS line, e.g.:
-  /// `W1AW-9>APZMDN::WB4APR   :Hello there{001`
+  /// `W1AW-9>APZMDN,TCPIP*::WB4APR   :Hello there{001`
   ///
   /// [toCallsign] is padded/truncated to 9 characters per spec.
   /// [messageId] is appended as `{id}` when non-null and non-empty.
@@ -62,27 +67,27 @@ class AprsEncoder {
     required String text,
     String? messageId,
   }) {
-    final src = _formatAddress(fromCallsign, fromSsid);
+    final header = _header(fromCallsign, fromSsid);
     final addressee = _padAddressee(toCallsign);
     final idSuffix = (messageId != null && messageId.isNotEmpty)
         ? '{$messageId'
         : '';
-    return '$src>$_dest::$addressee:$text$idSuffix';
+    return '$header:$addressee:$text$idSuffix';
   }
 
   /// Encodes an APRS ACK packet.
   ///
   /// Returns a full APRS-IS line, e.g.:
-  /// `W1AW-9>APZMDN::WB4APR   :ack001`
+  /// `W1AW-9>APZMDN,TCPIP*::WB4APR   :ack001`
   static String encodeAck({
     required String fromCallsign,
     required int fromSsid,
     required String toCallsign,
     required String messageId,
   }) {
-    final src = _formatAddress(fromCallsign, fromSsid);
+    final header = _header(fromCallsign, fromSsid);
     final addressee = _padAddressee(toCallsign);
-    return '$src>$_dest::$addressee:ack$messageId';
+    return '$header:$addressee:ack$messageId';
   }
 
   /// Encodes an APRS REJ packet.
@@ -92,14 +97,23 @@ class AprsEncoder {
     required String toCallsign,
     required String messageId,
   }) {
-    final src = _formatAddress(fromCallsign, fromSsid);
+    final header = _header(fromCallsign, fromSsid);
     final addressee = _padAddressee(toCallsign);
-    return '$src>$_dest::$addressee:rej$messageId';
+    return '$header:$addressee:rej$messageId';
   }
 
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  /// Returns the APRS-IS packet header for [callsign]/[ssid], including the
+  /// `TCPIP*` path that APRS-IS servers require for internet-originated packets.
+  ///
+  /// Example: `W1AW-9>APZMDN,TCPIP*:`
+  static String _header(String callsign, int ssid) {
+    final src = _formatAddress(callsign, ssid);
+    return '$src>$_dest,TCPIP*:';
+  }
 
   static String _formatAddress(String callsign, int ssid) =>
       ssid == 0 ? callsign.toUpperCase() : '${callsign.toUpperCase()}-$ssid';

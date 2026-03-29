@@ -127,5 +127,68 @@ void main() {
       expect(bytes[1], equals('P'.codeUnitAt(0) << 1));
       expect(bytes[2], equals('Z'.codeUnitAt(0) << 1));
     });
+
+    // -------------------------------------------------------------------------
+    // B2: C/H-bit correctness (AX.25 v2.2 §3.12.4)
+    // -------------------------------------------------------------------------
+
+    test('destination SSID byte has C-bit (bit 7) set', () {
+      final frame = Ax25Encoder.buildAprsFrame(
+        sourceCallsign: 'W1AW',
+        sourceSsid: 0,
+        infoField: '!',
+        digipeaterAliases: [],
+      );
+      final bytes = Ax25Encoder.encodeUiFrame(frame);
+      // Destination SSID byte is at index 6.
+      final destSsidByte = bytes[6];
+      expect(
+        destSsidByte & 0x80,
+        equals(0x80),
+        reason: 'Destination C-bit (bit 7) must be 1 (command frame)',
+      );
+    });
+
+    test('source SSID byte has C/H-bit (bit 7) clear', () {
+      final frame = Ax25Encoder.buildAprsFrame(
+        sourceCallsign: 'W1AW',
+        sourceSsid: 0,
+        infoField: '!',
+        digipeaterAliases: [],
+      );
+      final bytes = Ax25Encoder.encodeUiFrame(frame);
+      // Source SSID byte is at index 13.
+      final srcSsidByte = bytes[13];
+      expect(
+        srcSsidByte & 0x80,
+        equals(0),
+        reason: 'Source H-bit (bit 7) must be 0 on a newly transmitted frame',
+      );
+    });
+
+    test('digipeater SSID bytes have H-bit (bit 7) clear', () {
+      // Two digipeaters: WIDE1-1 and WIDE2-1.
+      final frame = Ax25Encoder.buildAprsFrame(
+        sourceCallsign: 'W1AW',
+        sourceSsid: 0,
+        infoField: '!',
+        // Uses the default ['WIDE1-1', 'WIDE2-1']
+      );
+      final bytes = Ax25Encoder.encodeUiFrame(frame);
+      // Layout: dest(7) + src(7) + digi0(7) + digi1(7) = 28 address bytes.
+      // Digi0 SSID byte at index 20; digi1 SSID byte at index 27.
+      final digi0SsidByte = bytes[20];
+      final digi1SsidByte = bytes[27];
+      expect(
+        digi0SsidByte & 0x80,
+        equals(0),
+        reason: 'Digipeater 0 H-bit (bit 7) must be 0 on a new frame',
+      );
+      expect(
+        digi1SsidByte & 0x80,
+        equals(0),
+        reason: 'Digipeater 1 H-bit (bit 7) must be 0 on a new frame',
+      );
+    });
   });
 }
