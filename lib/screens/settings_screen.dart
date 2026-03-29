@@ -782,45 +782,43 @@ class _BeaconingSection extends StatelessWidget {
             ),
           ),
         ],
-        if (beaconing.mode != BeaconMode.manual) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Row(
-              children: [
-                const Text('Transmit via'),
-                const SizedBox(width: 16),
-                Tooltip(
-                  message: !tx.tncAvailable ? 'TNC not connected' : '',
-                  child: SegmentedButton<TxTransportPref>(
-                    segments: [
-                      const ButtonSegment(
-                        value: TxTransportPref.aprsIs,
-                        icon: Icon(Symbols.wifi),
-                        label: Text('APRS-IS'),
-                      ),
-                      ButtonSegment(
-                        value: TxTransportPref.tnc,
-                        icon: const Icon(Symbols.settings_input_antenna),
-                        label: const Text('RF / TNC'),
-                        enabled: tx.tncAvailable,
-                      ),
-                    ],
-                    selected: {
-                      tx.preference == TxTransportPref.auto
-                          ? tx.effective
-                          : tx.preference,
-                    },
-                    onSelectionChanged: (modes) {
-                      if (modes.isNotEmpty) {
-                        context.read<TxService>().setPreference(modes.first);
-                      }
-                    },
-                  ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          child: Row(
+            children: [
+              const Text('Transmit via'),
+              const SizedBox(width: 16),
+              Tooltip(
+                message: !tx.tncAvailable ? 'TNC not connected' : '',
+                child: SegmentedButton<TxTransportPref>(
+                  segments: [
+                    const ButtonSegment(
+                      value: TxTransportPref.aprsIs,
+                      icon: Icon(Symbols.wifi),
+                      label: Text('APRS-IS'),
+                    ),
+                    ButtonSegment(
+                      value: TxTransportPref.tnc,
+                      icon: const Icon(Symbols.settings_input_antenna),
+                      label: const Text('RF / TNC'),
+                      enabled: tx.tncAvailable,
+                    ),
+                  ],
+                  selected: {
+                    tx.preference == TxTransportPref.auto
+                        ? tx.effective
+                        : tx.preference,
+                  },
+                  onSelectionChanged: (modes) {
+                    if (modes.isNotEmpty) {
+                      context.read<TxService>().setPreference(modes.first);
+                    }
+                  },
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ],
     );
   }
