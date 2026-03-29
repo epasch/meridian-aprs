@@ -5,6 +5,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
@@ -79,10 +80,11 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
               child: SegmentedButton<TxTransportPref>(
                 style: const ButtonStyle(visualDensity: VisualDensity.compact),
                 segments: [
-                  const ButtonSegment(
+                  ButtonSegment(
                     value: TxTransportPref.aprsIs,
-                    icon: Icon(Symbols.wifi),
-                    label: Text('IS'),
+                    icon: const Icon(Symbols.wifi),
+                    label: const Text('IS'),
+                    enabled: txService.aprsIsAvailable,
                   ),
                   ButtonSegment(
                     value: TxTransportPref.tnc,
@@ -194,6 +196,12 @@ class _MessageBubble extends StatelessWidget {
     final canResend = entry.status == MessageStatus.failed;
     if (!canCancel && !canResend) return;
 
+    // Deliver platform-standard long-press haptic feedback.
+    // On Android this maps to HapticFeedbackConstants.LONG_PRESS.
+    // On iOS this triggers the default UIFeedbackGenerator vibration.
+    // On desktop this is a no-op.
+    HapticFeedback.vibrate();
+
     final overlay =
         Overlay.of(context).context.findRenderObject()! as RenderBox;
     final position = RelativeRect.fromRect(
@@ -242,10 +250,10 @@ class _MessageBubble extends StatelessWidget {
 
     final bgColor = isOut
         ? theme.colorScheme.primary
-        : theme.colorScheme.surfaceContainerHigh;
+        : theme.colorScheme.secondaryContainer;
     final fgColor = isOut
         ? theme.colorScheme.onPrimary
-        : theme.colorScheme.onSurface;
+        : theme.colorScheme.onSecondaryContainer;
 
     final bubble = Align(
       alignment: isOut ? Alignment.centerRight : Alignment.centerLeft,

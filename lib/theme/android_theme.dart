@@ -61,6 +61,15 @@ ThemeData _buildTheme(ColorScheme scheme) {
         borderRadius: BorderRadius.circular(shapeRound.sm),
       ),
     ),
+    // M3 Expressive popup/context menu: extra-small M3 shape (sm=20dp round),
+    // surfaceContainer background, elevation 3 per M3 menu spec.
+    popupMenuTheme: PopupMenuThemeData(
+      color: scheme.surfaceContainer,
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(shapeRound.sm),
+      ),
+    ),
   );
 
   // Inject the M3ETheme ThemeExtension (colors, typography, shapes, spacing,

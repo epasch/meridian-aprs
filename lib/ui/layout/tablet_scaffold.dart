@@ -21,6 +21,10 @@ import 'meridian_map.dart';
 
 /// Tablet (600–1024 px) scaffold: collapsed navigation rail + full map +
 /// collapsed bottom panel.
+///
+/// The [NavigationRail] provides in-place tab switching via [IndexedStack]
+/// for Map, Log, Stations, and Messages. Connection opens a bottom sheet;
+/// Settings pushes a full-screen route.
 class TabletScaffold extends StatefulWidget {
   const TabletScaffold({
     super.key,
@@ -56,6 +60,7 @@ class TabletScaffold extends StatefulWidget {
 }
 
 class _TabletScaffoldState extends State<TabletScaffold> {
+  // Indices 0-3 correspond to Map, Log, Stations, Messages.
   int _selectedIndex = 0;
 
   void _showConnectionSheet(BuildContext context) {
@@ -63,6 +68,7 @@ class _TabletScaffoldState extends State<TabletScaffold> {
       context: context,
       isScrollControlled: true,
       builder: (_) => MeridianBottomSheet(
+        initialSize: 0.65,
         child: ConnectionSheet(
           stationService: widget.service,
           tncService: widget.tncService,
@@ -112,41 +118,16 @@ class _TabletScaffoldState extends State<TabletScaffold> {
             extended: false,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 1) {
-                // Log — push full-screen packet log.
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => PacketLogScreen(service: widget.service),
-                  ),
-                );
-              } else if (i == 2) {
-                // Stations — push full-screen station list.
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => StationListScreen(service: widget.service),
-                  ),
-                );
-              } else if (i == 3) {
-                // Messages — push thread list.
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    // TODO(ios): CupertinoPageRoute
-                    builder: (_) => const MessagesScreen(),
-                  ),
-                );
-              } else if (i == 4) {
-                // Connection — transient action; open sheet without updating
+              if (i == 4) {
+                // Connection — transient action; open sheet without changing
                 // the persistent rail selection.
                 _showConnectionSheet(context);
                 return;
               } else if (i == 5) {
                 widget.onNavigateToSettings();
-              } else {
-                setState(() => _selectedIndex = i);
+                return;
               }
+              setState(() => _selectedIndex = i);
             },
             destinations: [
               const NavigationRailDestination(
@@ -192,29 +173,39 @@ class _TabletScaffoldState extends State<TabletScaffold> {
           ),
           const VerticalDivider(width: 1),
           Expanded(
-            child: Column(
+            child: IndexedStack(
+              index: _selectedIndex,
               children: [
-                Expanded(
-                  child: MeridianMap(
-                    mapController: widget.mapController,
-                    markers: widget.markers,
-                    tileUrl: widget.tileUrl,
-                    connectionStatus: widget.connectionStatus,
-                    initialCenter: widget.initialCenter,
-                    initialZoom: widget.initialZoom,
-                    northUpLocked: widget.northUpLocked,
-                  ),
-                ),
-                // Collapsed bottom panel — tapping opens the full packet log.
-                _BottomPanel(
-                  service: widget.service,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => PacketLogScreen(service: widget.service),
+                // Index 0 — Map with collapsible bottom panel.
+                Column(
+                  children: [
+                    Expanded(
+                      child: MeridianMap(
+                        mapController: widget.mapController,
+                        markers: widget.markers,
+                        tileUrl: widget.tileUrl,
+                        connectionStatus: widget.connectionStatus,
+                        initialCenter: widget.initialCenter,
+                        initialZoom: widget.initialZoom,
+                        northUpLocked: widget.northUpLocked,
+                      ),
                     ),
-                  ),
+                    // Collapsed bottom panel — tapping switches to the Log tab.
+                    _BottomPanel(
+                      service: widget.service,
+                      onTap: () => setState(() => _selectedIndex = 1),
+                    ),
+                  ],
                 ),
+
+                // Index 1 — Packet log.
+                PacketLogScreen(service: widget.service),
+
+                // Index 2 — Station list.
+                StationListScreen(service: widget.service),
+
+                // Index 3 — Messages.
+                const MessagesScreen(),
               ],
             ),
           ),

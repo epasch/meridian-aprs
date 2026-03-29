@@ -22,9 +22,8 @@ import 'meridian_map.dart';
 /// Mobile (< 600 px) scaffold: full-screen map, FAB cluster, M3 Navigation Bar.
 ///
 /// The [NavigationBar] at the bottom provides access to all primary
-/// destinations. Tapping a non-map destination pushes the corresponding screen
-/// and highlights that destination while it is open; returning pops back to the
-/// map and resets the selection.
+/// destinations. Content switches in-place via an [IndexedStack] so the
+/// navigation bar remains visible on every tab.
 class MobileScaffold extends StatefulWidget {
   const MobileScaffold({
     super.key,
@@ -73,6 +72,7 @@ class _MobileScaffoldState extends State<MobileScaffold> {
       context: context,
       isScrollControlled: true,
       builder: (_) => MeridianBottomSheet(
+        initialSize: 0.65,
         child: ConnectionSheet(
           stationService: widget.service,
           tncService: widget.tncService,
@@ -82,59 +82,41 @@ class _MobileScaffoldState extends State<MobileScaffold> {
   }
 
   void _onDestinationSelected(int index) {
-    if (index == 0) return; // already on map
-
     HapticFeedback.selectionClick();
     setState(() => _selectedIndex = index);
-
-    final route = switch (index) {
-      1 => MaterialPageRoute<void>(
-        builder: (_) => PacketLogScreen(service: widget.service),
-      ),
-      2 => MaterialPageRoute<void>(
-        builder: (_) => StationListScreen(service: widget.service),
-      ),
-      3 => MaterialPageRoute<void>(
-        // TODO(ios): CupertinoPageRoute
-        builder: (_) => const MessagesScreen(),
-      ),
-      _ => null,
-    };
-
-    if (route != null) {
-      Navigator.push(context, route).then((_) {
-        if (mounted) setState(() => _selectedIndex = 0);
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Meridian'),
-        actions: [
-          MeridianStatusPill(
-            status: widget.connectionStatus,
-            label: 'APRS-IS',
-            onTap: _showConnectionSheet,
-          ),
-          if (!kIsWeb &&
-              (widget.tncConnectionStatus != ConnectionStatus.disconnected ||
-                  widget.tncService.activeTransportType != TransportType.none))
-            MeridianStatusPill(
-              label: _tncPillLabel(widget.tncService.activeTransportType),
-              status: widget.tncConnectionStatus,
-              onTap: _showConnectionSheet,
-            ),
-          IconButton(
-            icon: const Icon(Symbols.settings),
-            tooltip: 'Settings',
-            onPressed: widget.onNavigateToSettings,
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
+      appBar: _selectedIndex == 0
+          ? AppBar(
+              title: const Text('Meridian'),
+              actions: [
+                MeridianStatusPill(
+                  status: widget.connectionStatus,
+                  label: 'APRS-IS',
+                  onTap: _showConnectionSheet,
+                ),
+                if (!kIsWeb &&
+                    (widget.tncConnectionStatus !=
+                            ConnectionStatus.disconnected ||
+                        widget.tncService.activeTransportType !=
+                            TransportType.none))
+                  MeridianStatusPill(
+                    label: _tncPillLabel(widget.tncService.activeTransportType),
+                    status: widget.tncConnectionStatus,
+                    onTap: _showConnectionSheet,
+                  ),
+                IconButton(
+                  icon: const Icon(Symbols.settings),
+                  tooltip: 'Settings',
+                  onPressed: widget.onNavigateToSettings,
+                ),
+                const SizedBox(width: 4),
+              ],
+            )
+          : null,
       bottomNavigationBar: Builder(
         builder: (context) {
           final unread = context.watch<MessageService>().totalUnread;
@@ -175,78 +157,93 @@ class _MobileScaffoldState extends State<MobileScaffold> {
           );
         },
       ),
-      body: Stack(
+      body: IndexedStack(
+        index: _selectedIndex,
         children: [
-          MeridianMap(
-            mapController: widget.mapController,
-            markers: widget.markers,
-            tileUrl: widget.tileUrl,
-            connectionStatus: widget.connectionStatus,
-            initialCenter: widget.initialCenter,
-            initialZoom: widget.initialZoom,
-            northUpLocked: widget.northUpLocked,
-          ),
-          // FAB cluster — bottom-right above navigation bar.
-          SafeArea(
-            child: Align(
-              alignment: Alignment.bottomRight,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 16, bottom: 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    // Secondary FABs row.
-                    Row(
+          // Index 0 — Map with FAB cluster.
+          Stack(
+            children: [
+              MeridianMap(
+                mapController: widget.mapController,
+                markers: widget.markers,
+                tileUrl: widget.tileUrl,
+                connectionStatus: widget.connectionStatus,
+                initialCenter: widget.initialCenter,
+                initialZoom: widget.initialZoom,
+                northUpLocked: widget.northUpLocked,
+              ),
+              // FAB cluster — bottom-right above navigation bar.
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16, bottom: 16),
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        FloatingActionButton.small(
-                          heroTag: 'north_up_fab',
-                          onPressed: widget.onToggleNorthUp,
-                          tooltip: widget.northUpLocked
-                              ? 'North Up (locked) — tap to unlock'
-                              : 'Free rotation — tap to lock North Up',
-                          child: Icon(
-                            widget.northUpLocked
-                                ? Symbols.navigation
-                                : Symbols.explore,
-                          ),
+                        // Secondary FABs row.
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FloatingActionButton.small(
+                              heroTag: 'north_up_fab',
+                              onPressed: widget.onToggleNorthUp,
+                              tooltip: widget.northUpLocked
+                                  ? 'North Up (locked) — tap to unlock'
+                                  : 'Free rotation — tap to lock North Up',
+                              child: Icon(
+                                widget.northUpLocked
+                                    ? Symbols.navigation
+                                    : Symbols.explore,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            FloatingActionButton.small(
+                              heroTag: 'search_fab',
+                              onPressed: () {},
+                              tooltip: 'Search callsign',
+                              child: const Icon(Symbols.search),
+                            ),
+                            const SizedBox(width: 8),
+                            FloatingActionButton.small(
+                              heroTag: 'center_fab',
+                              onPressed: () {},
+                              tooltip: 'Center on my location',
+                              child: const Icon(Symbols.my_location),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        FloatingActionButton.small(
-                          heroTag: 'search_fab',
-                          onPressed: () {},
-                          tooltip: 'Search callsign',
-                          child: const Icon(Symbols.search),
-                        ),
-                        const SizedBox(width: 8),
-                        FloatingActionButton.small(
-                          heroTag: 'center_fab',
-                          onPressed: () {},
-                          tooltip: 'Center on my location',
-                          child: const Icon(Symbols.my_location),
+                        const SizedBox(height: 8),
+                        // Primary beacon FAB.
+                        Builder(
+                          builder: (ctx) {
+                            final beaconing = ctx.watch<BeaconingService>();
+                            return BeaconFAB(
+                              isBeaconing: beaconing.isActive,
+                              mode: beaconing.mode,
+                              lastBeaconAt: beaconing.lastBeaconAt,
+                              onTap: beaconing.beaconNow,
+                              onLongPress: beaconing.beaconNow,
+                            );
+                          },
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    // Primary beacon FAB.
-                    Builder(
-                      builder: (ctx) {
-                        final beaconing = ctx.watch<BeaconingService>();
-                        return BeaconFAB(
-                          isBeaconing: beaconing.isActive,
-                          mode: beaconing.mode,
-                          lastBeaconAt: beaconing.lastBeaconAt,
-                          onTap: beaconing.beaconNow,
-                          onLongPress: beaconing.beaconNow,
-                        );
-                      },
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
+
+          // Index 1 — Packet log.
+          PacketLogScreen(service: widget.service),
+
+          // Index 2 — Station list.
+          StationListScreen(service: widget.service),
+
+          // Index 3 — Messages.
+          const MessagesScreen(),
         ],
       ),
     );

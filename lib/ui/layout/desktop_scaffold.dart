@@ -23,6 +23,10 @@ import 'meridian_map.dart';
 
 /// Desktop (> 1024 px) scaffold: expanded navigation rail (240 px) + map +
 /// side panel.
+///
+/// The [NavigationRail] provides in-place tab switching via [IndexedStack]
+/// for Map, Stations, and Messages. Connection opens a bottom sheet; Settings
+/// pushes a full-screen route.
 class DesktopScaffold extends StatefulWidget {
   const DesktopScaffold({
     super.key,
@@ -58,6 +62,7 @@ class DesktopScaffold extends StatefulWidget {
 }
 
 class _DesktopScaffoldState extends State<DesktopScaffold> {
+  // Indices 0-2 correspond to Map, Stations, Messages.
   int _selectedIndex = 0;
   bool _navRailExpanded = true;
   bool _panelVisible = true;
@@ -67,6 +72,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
       context: context,
       isScrollControlled: true,
       builder: (_) => MeridianBottomSheet(
+        initialSize: 0.65,
         child: ConnectionSheet(
           stationService: widget.service,
           tncService: widget.tncService,
@@ -130,33 +136,16 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             minExtendedWidth: 240,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 1) {
-                // Stations — push full-screen station list.
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => StationListScreen(service: widget.service),
-                  ),
-                );
-              } else if (i == 2) {
-                // Messages — push thread list.
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    // TODO(ios): CupertinoPageRoute
-                    builder: (_) => const MessagesScreen(),
-                  ),
-                );
-              } else if (i == 3) {
-                // Connection — transient action; open sheet without updating
+              if (i == 3) {
+                // Connection — transient action; open sheet without changing
                 // the persistent rail selection.
                 _showConnectionSheet(context);
                 return;
               } else if (i == 4) {
                 widget.onNavigateToSettings();
-              } else {
-                setState(() => _selectedIndex = i);
+                return;
               }
+              setState(() => _selectedIndex = i);
             },
             destinations: [
               const NavigationRailDestination(
@@ -197,28 +186,46 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
           ),
           const VerticalDivider(width: 1),
           Expanded(
-            child: MeridianMap(
-              mapController: widget.mapController,
-              markers: widget.markers,
-              tileUrl: widget.tileUrl,
-              connectionStatus: widget.connectionStatus,
-              initialCenter: widget.initialCenter,
-              initialZoom: widget.initialZoom,
-              northUpLocked: widget.northUpLocked,
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                // Index 0 — Map with optional side packet log panel.
+                Row(
+                  children: [
+                    Expanded(
+                      child: MeridianMap(
+                        mapController: widget.mapController,
+                        markers: widget.markers,
+                        tileUrl: widget.tileUrl,
+                        connectionStatus: widget.connectionStatus,
+                        initialCenter: widget.initialCenter,
+                        initialZoom: widget.initialZoom,
+                        northUpLocked: widget.northUpLocked,
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: _panelVisible
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const VerticalDivider(width: 1),
+                                _PacketLogPanel(service: widget.service),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+
+                // Index 1 — Station list.
+                StationListScreen(service: widget.service),
+
+                // Index 2 — Messages.
+                const MessagesScreen(),
+              ],
             ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            child: _panelVisible
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const VerticalDivider(width: 1),
-                      _PacketLogPanel(service: widget.service),
-                    ],
-                  )
-                : const SizedBox.shrink(),
           ),
         ],
       ),

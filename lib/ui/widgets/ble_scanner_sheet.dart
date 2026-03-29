@@ -7,13 +7,45 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/transport/ble_constants.dart';
+import '../../core/transport/tnc_preset.dart';
 import '../../services/tnc_service.dart';
+
+/// Filter option for the BLE device scanner.
+///
+/// [_BleFilterOption.all] shows every discovered device. A preset-based
+/// option limits results to devices whose advertised GATT service UUIDs
+/// match the known UUID for that TNC model.
+class _BleFilterOption {
+  const _BleFilterOption({required this.label, this.serviceUuid});
+
+  /// Display name shown in the dropdown.
+  final String label;
+
+  /// If non-null, only devices advertising this service UUID are shown.
+  final String? serviceUuid;
+
+  static const _BleFilterOption all = _BleFilterOption(label: 'All Devices');
+
+  /// One entry per TNC preset with a known BLE service UUID.
+  static final List<_BleFilterOption> presetOptions = [
+    _BleFilterOption(
+      label: TncPreset.mobilinkdTnc4.displayName,
+      serviceUuid: kMobilinkdServiceUuid,
+    ),
+  ];
+
+  static List<_BleFilterOption> get values => [all, ...presetOptions];
+}
 
 /// Bottom sheet for scanning and connecting to a BLE KISS TNC.
 ///
-/// Scans for nearby BLE devices, optionally filtering to Mobilinkd-compatible
-/// devices (service UUID [kMobilinkdServiceUuid]). Tapping "Connect" on a
-/// device calls [TncService.connectBle] and closes the sheet on success.
+/// Scans for nearby BLE devices and optionally filters results by TNC type
+/// selected in the dropdown. "All Devices" shows everything; selecting a
+/// specific TNC model limits results to devices advertising that TNC's GATT
+/// service UUID.
+///
+/// Tapping "Connect" on a device calls [TncService.connectBle] and closes
+/// the sheet on success.
 class BleScannerSheet extends StatefulWidget {
   const BleScannerSheet({super.key, required this.tncService});
 
@@ -25,7 +57,7 @@ class BleScannerSheet extends StatefulWidget {
 
 class _BleScannerSheetState extends State<BleScannerSheet> {
   bool _scanning = false;
-  bool _filterMobilinkd = true;
+  _BleFilterOption _filter = _BleFilterOption.presetOptions.first;
   String? _bleError;
   String? _connectingDeviceId;
 
@@ -93,13 +125,11 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
       if (!mounted) return;
       setState(() {
         for (final r in results) {
-          if (_filterMobilinkd) {
+          if (_filter.serviceUuid != null) {
             final advertisedUuids = r.advertisementData.serviceUuids
                 .map((g) => g.str.toLowerCase())
                 .toList();
-            if (!advertisedUuids.contains(
-              kMobilinkdServiceUuid.toLowerCase(),
-            )) {
+            if (!advertisedUuids.contains(_filter.serviceUuid!.toLowerCase())) {
               continue;
             }
           }
@@ -108,7 +138,8 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
       });
     });
 
-    // FlutterBluePlus stops on timeout; listen for adapter state to detect early stop.
+    // FlutterBluePlus stops on timeout; listen for adapter state to detect
+    // early stop.
     FlutterBluePlus.isScanning.listen((isScanning) {
       if (!isScanning && mounted) {
         setState(() => _scanning = false);
@@ -231,14 +262,14 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
             const SizedBox(height: 16),
           ],
 
-          // Controls row.
+          // Controls row: scan button + TNC filter dropdown.
           if (_isBlePlatform && _bleError == null) ...[
             Row(
               children: [
                 FilledButton.icon(
                   onPressed: _scanning ? null : _startScan,
                   icon: Icon(_scanning ? Symbols.stop : Symbols.search),
-                  label: Text(_scanning ? 'Scanning…' : 'Scan'),
+                  label: Text(_scanning ? 'Scanning\u2026' : 'Scan'),
                 ),
                 const SizedBox(width: 12),
                 if (_scanning) ...[
@@ -250,20 +281,33 @@ class _BleScannerSheetState extends State<BleScannerSheet> {
                   const SizedBox(width: 8),
                 ],
                 const Spacer(),
-                // Filter toggle.
-                Text('Mobilinkd only', style: theme.textTheme.labelSmall),
-                Switch(
-                  value: _filterMobilinkd,
-                  onChanged: (v) => setState(() {
-                    _filterMobilinkd = v;
-                    _deviceMap.clear();
-                  }),
+                // TNC type filter dropdown.
+                DropdownButton<_BleFilterOption>(
+                  value: _filter,
+                  isDense: true,
+                  items: _BleFilterOption.values.map((option) {
+                    return DropdownMenuItem<_BleFilterOption>(
+                      value: option,
+                      child: Text(
+                        option.label,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (option) {
+                    if (option != null) {
+                      setState(() {
+                        _filter = option;
+                        _deviceMap.clear();
+                      });
+                    }
+                  },
                 ),
               ],
             ),
             const SizedBox(height: 8),
 
-            // Scanning indicator.
+            // Scanning progress indicator.
             if (_scanning) const LinearProgressIndicator(),
             const SizedBox(height: 8),
           ],

@@ -74,6 +74,8 @@ class _MapScreenState extends State<MapScreen> {
     _service = widget.service;
     _connectionStatus = _service.currentConnectionStatus;
     _service.stationUpdates.listen(_onStationsUpdated);
+    // Seed markers from persisted stations already loaded before runApp.
+    _onStationsUpdated(_service.currentStations);
     _service.connectionState.listen((status) {
       if (!mounted) return;
       final wasConnecting = _connectionStatus == ConnectionStatus.connecting;
@@ -116,11 +118,17 @@ class _MapScreenState extends State<MapScreen> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.clearMaterialBanners();
 
+    final txService = context.read<TxService>();
+
     if (event is TxEventTncDisconnected) {
+      // Only mention APRS-IS fallback if IS is actually connected.
+      final content = txService.aprsIsAvailable
+          ? 'TNC disconnected — switched to APRS-IS'
+          : 'TNC disconnected';
       // TODO(ios): use Cupertino-styled banner
       messenger.showMaterialBanner(
         MaterialBanner(
-          content: const Text('TNC disconnected — switched to APRS-IS'),
+          content: Text(content),
           actions: [
             TextButton(
               onPressed: messenger.clearMaterialBanners,
@@ -130,6 +138,8 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
     } else if (event is TxEventTncReconnected) {
+      // If APRS-IS is not connected there is no meaningful choice — skip banner.
+      if (!txService.aprsIsAvailable) return;
       messenger.showMaterialBanner(
         MaterialBanner(
           content: const Text('TNC reconnected'),

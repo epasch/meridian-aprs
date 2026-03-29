@@ -39,6 +39,7 @@ class TxEventTncReconnected extends TxEvent {}
 class TxService extends ChangeNotifier {
   TxService(this._aprsIs, this._tnc) {
     _tnc.connectionState.listen(_onTncConnectionState);
+    _aprsIs.connectionState.listen((_) => notifyListeners());
   }
 
   final AprsTransport _aprsIs;
@@ -61,6 +62,10 @@ class TxService extends ChangeNotifier {
 
   /// Whether the user has explicitly chosen a transport (vs default/auto).
   bool get userHasExplicitlySet => _userHasExplicitlySet;
+
+  /// Whether APRS-IS is currently connected and available for TX.
+  bool get aprsIsAvailable =>
+      _aprsIs.currentStatus == ConnectionStatus.connected;
 
   /// Whether a TNC is currently connected and available for TX.
   bool get tncAvailable => _tnc.transportManager.isConnected;

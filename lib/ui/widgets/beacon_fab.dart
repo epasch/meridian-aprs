@@ -12,9 +12,6 @@ import '../../theme/meridian_colors.dart';
 /// - Idle/manual: primary blue background, broadcasting icon.
 /// - Active ([isBeaconing] == true): pulsing danger red, mode label.
 ///
-/// Long-press within 30 s of the last beacon shows a confirmation dialog
-/// before triggering again (prevents accidental double-beacons in auto/smart).
-///
 /// The hero tag is fixed to `'beacon_fab'` to avoid conflicts in scaffolds
 /// that show multiple FABs.
 class BeaconFAB extends StatefulWidget {
@@ -32,7 +29,7 @@ class BeaconFAB extends StatefulWidget {
   final BeaconMode mode;
   final DateTime? lastBeaconAt;
 
-  /// Called when a long-press fires (after cooldown confirmation dialog if needed).
+  /// Called when a long-press fires.
   final VoidCallback? onLongPress;
 
   @override
@@ -45,6 +42,7 @@ class _BeaconFABState extends State<BeaconFAB>
   late final Animation<double> _scaleAnim;
 
   Timer? _agoTimer;
+  DateTime? _lastLongPress;
 
   @override
   void initState() {
@@ -93,12 +91,6 @@ class _BeaconFABState extends State<BeaconFAB>
     super.dispose();
   }
 
-  bool get _isWithinCooldown {
-    if (widget.lastBeaconAt == null) return false;
-    return DateTime.now().difference(widget.lastBeaconAt!) <
-        const Duration(seconds: 30);
-  }
-
   String get _label {
     if (!widget.isBeaconing) return 'Beacon';
     return switch (widget.mode) {
@@ -124,35 +116,20 @@ class _BeaconFABState extends State<BeaconFAB>
 
   Future<void> _handleLongPress() async {
     if (widget.onLongPress == null) return;
-    if (widget.mode == BeaconMode.manual || !_isWithinCooldown) {
-      HapticFeedback.mediumImpact();
-      widget.onLongPress!();
+    final now = DateTime.now();
+    if (_lastLongPress != null &&
+        now.difference(_lastLongPress!) < const Duration(seconds: 30)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait 30 seconds between manual beacons.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
       return;
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Send beacon now?'),
-        content: const Text(
-          'A beacon was just sent. Sending again so soon may cause duplicate '
-          'reports on the APRS network.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Send'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      HapticFeedback.mediumImpact();
-      widget.onLongPress!();
-    }
+    _lastLongPress = now;
+    HapticFeedback.mediumImpact();
+    widget.onLongPress!();
   }
 
   @override
