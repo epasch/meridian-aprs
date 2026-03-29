@@ -1195,7 +1195,12 @@ class _TncSectionState extends State<_TncSection> {
   Widget build(BuildContext context) {
     final tncService = context.watch<TncService>();
     final theme = Theme.of(context);
-    final ports = tncService.availablePorts();
+    final isBlePlatform = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    final isSerialPlatform =
+        !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
+
+    // Only call availablePorts() on desktop — libserialport throws on Android.
+    final ports = isSerialPlatform ? tncService.availablePorts() : <String>[];
 
     // Ensure the selected port is still valid after a refresh.
     if (_selectedPort != null &&
@@ -1203,8 +1208,6 @@ class _TncSectionState extends State<_TncSection> {
         !ports.contains(_selectedPort)) {
       _selectedPort = null;
     }
-
-    final isBlePlatform = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
