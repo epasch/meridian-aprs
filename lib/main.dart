@@ -8,11 +8,16 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/packet/aprs_packet.dart' show PacketSource;
 import 'core/transport/aprs_is_transport.dart';
 import 'screens/map_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
+import 'services/beaconing_service.dart';
+import 'services/message_service.dart';
 import 'services/station_service.dart';
+import 'services/station_settings_service.dart';
 import 'services/tnc_service.dart';
+import 'services/tx_service.dart';
 import 'theme/android_theme.dart';
 import 'theme/desktop_theme.dart';
 import 'theme/ios_theme.dart';
@@ -57,14 +62,37 @@ Future<void> main() async {
         '#filter r/${mapLat.toStringAsFixed(1)}/${mapLon.toStringAsFixed(1)}/100\r\n',
   );
   final service = StationService(transport);
+  await service.loadPersistedHistory(prefs);
   final tncService = TncService(service);
   await tncService.loadPersistedConfig();
+
+  final stationSettings = StationSettingsService(prefs);
+  final txService = TxService(transport, tncService);
+  await txService.loadPersistedPreference();
+
+  final beaconingService = BeaconingService(
+    stationSettings,
+    txService,
+    onBeaconSent: (line) =>
+        service.ingestLine(line, source: PacketSource.aprsIs),
+  );
+  await beaconingService.loadPersistedSettings();
+
+  final messageService = MessageService(stationSettings, txService, service);
+  await messageService.loadHistory();
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<ThemeController>.value(value: themeController),
+        ChangeNotifierProvider<StationService>.value(value: service),
         ChangeNotifierProvider<TncService>.value(value: tncService),
+        ChangeNotifierProvider<StationSettingsService>.value(
+          value: stationSettings,
+        ),
+        ChangeNotifierProvider<TxService>.value(value: txService),
+        ChangeNotifierProvider<BeaconingService>.value(value: beaconingService),
+        ChangeNotifierProvider<MessageService>.value(value: messageService),
       ],
       child: MeridianApp(
         onboardingComplete: onboardingComplete,

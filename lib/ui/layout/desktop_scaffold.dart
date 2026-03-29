@@ -6,10 +6,16 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:provider/provider.dart';
+
+import '../../screens/messages_screen.dart';
 import '../../screens/packet_log_screen.dart';
 import '../../screens/station_list_screen.dart';
+import '../../services/beaconing_service.dart';
+import '../../services/message_service.dart';
 import '../../services/station_service.dart';
 import '../../services/tnc_service.dart';
+import '../../theme/meridian_colors.dart';
 import '../widgets/connection_sheet.dart';
 import '../widgets/meridian_bottom_sheet.dart';
 import '../widgets/meridian_status_pill.dart';
@@ -17,6 +23,10 @@ import 'meridian_map.dart';
 
 /// Desktop (> 1024 px) scaffold: expanded navigation rail (240 px) + map +
 /// side panel.
+///
+/// The [NavigationRail] provides in-place tab switching via [IndexedStack]
+/// for Map, Stations, and Messages. Connection opens a bottom sheet; Settings
+/// pushes a full-screen route.
 class DesktopScaffold extends StatefulWidget {
   const DesktopScaffold({
     super.key,
@@ -52,6 +62,7 @@ class DesktopScaffold extends StatefulWidget {
 }
 
 class _DesktopScaffoldState extends State<DesktopScaffold> {
+  // Indices 0-2 correspond to Map, Stations, Messages.
   int _selectedIndex = 0;
   bool _navRailExpanded = true;
   bool _panelVisible = true;
@@ -61,6 +72,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
       context: context,
       isScrollControlled: true,
       builder: (_) => MeridianBottomSheet(
+        initialSize: 0.65,
         child: ConnectionSheet(
           stationService: widget.service,
           tncService: widget.tncService,
@@ -108,6 +120,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             tooltip: _panelVisible ? 'Hide packet log' : 'Show packet log',
             onPressed: () => setState(() => _panelVisible = !_panelVisible),
           ),
+          _BeaconToolbarButton(),
           IconButton(
             icon: const Icon(Symbols.settings),
             tooltip: 'Settings',
@@ -123,47 +136,48 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             minExtendedWidth: 240,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 1) {
-                // Stations — push full-screen station list.
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => StationListScreen(service: widget.service),
-                  ),
-                );
-              } else if (i == 3) {
-                // Connection — transient action; open sheet without updating
+              if (i == 3) {
+                // Connection — transient action; open sheet without changing
                 // the persistent rail selection.
                 _showConnectionSheet(context);
                 return;
               } else if (i == 4) {
                 widget.onNavigateToSettings();
-              } else {
-                setState(() => _selectedIndex = i);
+                return;
               }
+              setState(() => _selectedIndex = i);
             },
-            destinations: const [
-              NavigationRailDestination(
+            destinations: [
+              const NavigationRailDestination(
                 icon: Icon(Symbols.map),
                 selectedIcon: Icon(Symbols.map),
                 label: Text('Map'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Symbols.people),
                 selectedIcon: Icon(Symbols.people),
                 label: Text('Stations'),
               ),
               NavigationRailDestination(
-                icon: Icon(Symbols.chat),
-                selectedIcon: Icon(Symbols.chat),
-                label: Text('Messages'),
+                icon: Builder(
+                  builder: (ctx) {
+                    final unread = ctx.watch<MessageService>().totalUnread;
+                    return Badge(
+                      isLabelVisible: unread > 0,
+                      label: Text('$unread'),
+                      child: const Icon(Symbols.chat),
+                    );
+                  },
+                ),
+                selectedIcon: const Icon(Symbols.chat),
+                label: const Text('Messages'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Symbols.router),
                 selectedIcon: Icon(Symbols.router),
                 label: Text('Connection'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Symbols.settings),
                 selectedIcon: Icon(Symbols.settings),
                 label: Text('Settings'),
@@ -172,31 +186,74 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
           ),
           const VerticalDivider(width: 1),
           Expanded(
-            child: MeridianMap(
-              mapController: widget.mapController,
-              markers: widget.markers,
-              tileUrl: widget.tileUrl,
-              connectionStatus: widget.connectionStatus,
-              initialCenter: widget.initialCenter,
-              initialZoom: widget.initialZoom,
-              northUpLocked: widget.northUpLocked,
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                // Index 0 — Map with optional side packet log panel.
+                Row(
+                  children: [
+                    Expanded(
+                      child: MeridianMap(
+                        mapController: widget.mapController,
+                        markers: widget.markers,
+                        tileUrl: widget.tileUrl,
+                        connectionStatus: widget.connectionStatus,
+                        initialCenter: widget.initialCenter,
+                        initialZoom: widget.initialZoom,
+                        northUpLocked: widget.northUpLocked,
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: _panelVisible
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const VerticalDivider(width: 1),
+                                _PacketLogPanel(service: widget.service),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+
+                // Index 1 — Station list.
+                StationListScreen(service: widget.service),
+
+                // Index 2 — Messages.
+                const MessagesScreen(),
+              ],
             ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            child: _panelVisible
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const VerticalDivider(width: 1),
-                      _PacketLogPanel(service: widget.service),
-                    ],
-                  )
-                : const SizedBox.shrink(),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Compact beacon toolbar button for the desktop AppBar.
+///
+/// Shows a filled icon when actively beaconing (auto/smart), a plain icon when
+/// idle or in manual mode. Tapping fires [BeaconingService.beaconNow].
+class _BeaconToolbarButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final svc = context.watch<BeaconingService>();
+    final isActive = svc.isActive;
+    final tooltip = switch (svc.mode) {
+      BeaconMode.auto => 'Auto beaconing (${svc.autoIntervalS}s interval)',
+      BeaconMode.smart => 'SmartBeaconing™ active',
+      BeaconMode.manual => 'Send beacon now',
+    };
+    return IconButton(
+      icon: Icon(
+        Symbols.cell_tower,
+        color: isActive ? MeridianColors.danger : null,
+      ),
+      tooltip: tooltip,
+      onPressed: () => svc.beaconNow(),
     );
   }
 }

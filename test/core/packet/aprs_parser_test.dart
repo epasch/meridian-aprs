@@ -963,6 +963,44 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
+  // B6: parseFrame strips trailing CR from AX.25 info field
+  // ---------------------------------------------------------------------------
+
+  group('parseFrame — trailing CR stripping', () {
+    test('ACK info field with trailing \\r yields correct messageId', () {
+      // Many TNCs (Mobilinkd, Direwolf) append 0x0D to the AX.25 info field.
+      // Without trimRight() the extracted ackId is '003\r', which never matches
+      // outgoing wireIds and ACK handling silently fails.
+      final infoBytes = ':KM4TJO-4 :ack003\r'.codeUnits
+          .map((c) => c & 0xFF)
+          .toList();
+      final frame = _buildAprsFrame(
+        dst: 'APY03D',
+        src: 'KM4TJO',
+        srcSsid: 7,
+        info: infoBytes,
+      );
+      final packet = parser.parseFrame(frame);
+      expect(packet, isA<MessagePacket>());
+      final mp = packet as MessagePacket;
+      expect(mp.isAck, isTrue);
+      expect(mp.messageId, equals('003'));
+    });
+
+    test('message info field with trailing \\r yields correct messageId', () {
+      final infoBytes = ':KM4TJO-4 :Hello world{005\r'.codeUnits
+          .map((c) => c & 0xFF)
+          .toList();
+      final frame = _buildAprsFrame(dst: 'APRS', src: 'W1AW', info: infoBytes);
+      final packet = parser.parseFrame(frame);
+      expect(packet, isA<MessagePacket>());
+      final mp = packet as MessagePacket;
+      expect(mp.messageId, equals('005'));
+      expect(mp.message, equals('Hello world'));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // B5: Item minimum name length (3-char minimum)
   // ---------------------------------------------------------------------------
 
@@ -1020,14 +1058,14 @@ void main() {
 
   group('PositionPacket compressed — speed formula', () {
     // cByte=3 → course=12; sByte=0 → speed = pow(1.08,0)-1 = 0.0
-    // T byte: comprType=1 (course/speed) → bits 5-4 of (T-33) = 0b0001_0000 = 16
-    //   T = 33+16 = 49 = '1'
+    // T byte: nmeasSource = (tByte>>3)&0x3 must NOT be 2 to stay in course/speed
+    //   path.  Use tByte=0 → T = 33+0 = 33 = '!'; (0>>3)&0x3 = 0 (not GGA).
     // c byte: cByte+33 = 36 = '$'
     // s byte: sByte+33 = 33 = '!'
-    // Packet uses existing compressed pos base '/5L!!<*e7>' with csT='$!1'
+    // Packet uses existing compressed pos base '/5L!!<*e7>' with csT='$!!'
     test('sByte=0 produces speed=0.0 not -1.0', () {
       final p = expectPacketType<PositionPacket>(
-        r'N0CALL>APRS:=/5L!!<*e7>$!1Comment',
+        r'N0CALL>APRS:=/5L!!<*e7>$!!Comment',
       );
       expect(p.speed, equals(0.0));
       expect(p.course, equals(12));
@@ -1168,13 +1206,111 @@ void main() {
   group('PositionPacket compressed — GGA altitude', () {
     // altitude ≈ 1000 ft: pow(1.002, x) = 1000 → x ≈ 3453
     //   3453 = 37*91 + 86 → cByte=37 → char 70='F', sByte=86 → char 119='w'
-    //   T byte: comprType=2 → bits 5-4 of (T-33) = 0b10 = 0x20 → T=65='A'
+    //   T byte: NMEA source = (tByte>>3)&0x3 must == 2 for GGA.
+    //   tByte=16 → T = 33+16 = 49 = '1'; (16>>3)&0x3 = 2 ✓
     test('GGA altitude ~1000 ft decoded from compressed position', () {
       final p = expectPacketType<PositionPacket>(
-        r'N0CALL>APRS:=/5L!!<*e7>FwAMy comment',
+        r'N0CALL>APRS:=/5L!!<*e7>Fw1My comment',
       );
       expect(p.altitude, isNotNull);
       expect(p.altitude!, closeTo(1000.0, 50.0));
+    });
+
+    // GPS fix bit (bit 5 of tByte) set alongside GGA NMEA source.
+    //   tByte = 16 (nmeasSource=2) | 32 (GPS fix set) = 48 → T = 33+48 = 81 = 'Q'
+    //   (48>>3)&0x3 = 6&0x3 = 2 → still GGA; (48>>5)&1 = 1 (GPS fix)
+    test('GGA altitude decoded when GPS fix bit is also set in T byte', () {
+      final p = expectPacketType<PositionPacket>(
+        r'N0CALL>APRS:=/5L!!<*e7>FwQMy comment',
+      );
+      expect(p.altitude, isNotNull);
+      expect(p.altitude!, closeTo(1000.0, 50.0));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // B1: Compressed position — radio range c byte ('{')
+  // ---------------------------------------------------------------------------
+
+  group('PositionPacket compressed — radio range c byte', () {
+    // c byte '{' = ASCII 123, value = 123-33 = 90 → radio range, skip 3 bytes.
+    // Comment following the 3 csT bytes must be preserved.
+    test(
+      'radio range c byte produces null course/speed/altitude and keeps comment',
+      () {
+        // csT = '{' (c=90) + any 2 bytes + comment
+        final p = expectPacketType<PositionPacket>(
+          r'N0CALL>APRS:=/5L!!<*e7>{!!After',
+        );
+        expect(p.course, isNull);
+        expect(p.speed, isNull);
+        expect(p.altitude, isNull);
+        expect(p.comment, equals('After'));
+      },
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // M1: HMS timestamp format (HHMMSSh)
+  // ---------------------------------------------------------------------------
+
+  group('timestamp — HMS format (HHMMSSh)', () {
+    // HMS: HHMMSSh — hour, minute, second, 'h' suffix.
+    // Packet with DTI '@' (position with timestamp) and HMS timestamp 123456h.
+    test('HMS timestamp HHMMSSh parses to correct time', () {
+      // '123456h' → hour=12, min=34, sec=56
+      final p = expectPacketType<PositionPacket>(
+        'N0CALL>APRS:@123456h4903.50N/07201.75W-HMS test',
+      );
+      expect(p.timestamp, isNotNull);
+      expect(p.timestamp!.hour, equals(12));
+      expect(p.timestamp!.minute, equals(34));
+      expect(p.timestamp!.second, equals(56));
+    });
+
+    // Per spec, 'h' suffix is HMS only, NOT DHM.  A 7-char string ending in 'h'
+    // where the first two chars are valid day digits (01-31) must still be
+    // treated as HMS (HHMMSS), not as a day-based timestamp.
+    test('h-suffixed 7-char string is treated as HMS not DHM', () {
+      // '010203h' could be mis-read as DHM (day=01, hour=02, min=03).
+      // Correct: HMS → hour=01, minute=02, second=03.
+      final p = expectPacketType<PositionPacket>(
+        'N0CALL>APRS:@010203h4903.50N/07201.75W-HMS test',
+      );
+      expect(p.timestamp, isNotNull);
+      expect(p.timestamp!.hour, equals(1));
+      expect(p.timestamp!.minute, equals(2));
+      expect(p.timestamp!.second, equals(3));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // M3: ACK/REJ — case-sensitive match only
+  // ---------------------------------------------------------------------------
+
+  group('MessagePacket — ACK/REJ case sensitivity (M3)', () {
+    test('lowercase ack is recognised as ACK packet', () {
+      final p = expectPacketType<MessagePacket>('W1AW>APRS::N0CALL   :ack001');
+      expect(p.isAck, isTrue);
+      expect(p.messageId, equals('001'));
+    });
+
+    test('uppercase ACK text is NOT mis-identified as protocol ACK', () {
+      // 'ACK' in uppercase is user text, not a protocol acknowledgement.
+      final p = expectPacketType<MessagePacket>('W1AW>APRS::N0CALL   :ACK001');
+      expect(p.isAck, isFalse);
+      expect(p.message, equals('ACK001'));
+    });
+
+    test('lowercase rej is recognised as REJ packet', () {
+      final p = expectPacketType<MessagePacket>('W1AW>APRS::N0CALL   :rej001');
+      expect(p.isRej, isTrue);
+    });
+
+    test('uppercase REJ text is NOT mis-identified as protocol REJ', () {
+      final p = expectPacketType<MessagePacket>('W1AW>APRS::N0CALL   :REJ001');
+      expect(p.isRej, isFalse);
+      expect(p.message, equals('REJ001'));
     });
   });
 }

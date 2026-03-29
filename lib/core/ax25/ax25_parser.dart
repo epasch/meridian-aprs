@@ -97,7 +97,8 @@ class Ax25Parser {
     final callsign = String.fromCharCodes(charBytes).trimRight();
     final ssidByte = bytes[offset + 6];
     final ssid = (ssidByte >> 1) & 0x0F;
-    final hBit = ((ssidByte >> 5) & 0x01) == 1;
+    // AX.25 v2.2 §3.12.4: H-bit (has-been-repeated) is bit 7 of the SSID byte.
+    final hBit = ((ssidByte >> 7) & 0x01) == 1;
     return Ax25Address(callsign: callsign, ssid: ssid, hBit: hBit);
   }
 }

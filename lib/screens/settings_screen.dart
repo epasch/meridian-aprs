@@ -6,10 +6,20 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
+import 'package:latlong2/latlong.dart';
+
 import '../core/transport/tnc_config.dart';
 import '../core/transport/tnc_preset.dart';
+import '../services/beaconing_service.dart';
+import 'location_picker_screen.dart';
+import '../services/message_service.dart';
+import '../services/station_service.dart';
+import '../services/station_settings_service.dart';
 import '../services/tnc_service.dart';
+import '../services/tx_service.dart';
 import '../ui/widgets/ble_scanner_sheet.dart';
+import '../ui/widgets/aprs_symbol_widget.dart';
+import '../ui/widgets/callsign_field.dart';
 import '../ui/widgets/meridian_bottom_sheet.dart';
 import '../theme/meridian_colors.dart';
 import '../theme/theme_controller.dart';
@@ -27,7 +37,7 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView.separated(
-        itemCount: 10,
+        itemCount: 11,
         separatorBuilder: (context, index) =>
             const Divider(indent: 16, endIndent: 16),
         itemBuilder: (context, index) => [
@@ -37,6 +47,7 @@ class SettingsScreen extends StatelessWidget {
           const _BeaconingSection(),
           const _ConnectionSection(),
           const _TncSection(),
+          const _HistorySection(),
           const _DisplaySection(),
           const _NotificationsSection(),
           const _AccountSection(),
@@ -291,24 +302,567 @@ class _ColorSwatch extends StatelessWidget {
 // My Station
 // ---------------------------------------------------------------------------
 
-class _MyStationSection extends StatelessWidget {
+class _MyStationSection extends StatefulWidget {
   const _MyStationSection();
 
   @override
+  State<_MyStationSection> createState() => _MyStationSectionState();
+}
+
+class _MyStationSectionState extends State<_MyStationSection> {
+  late final TextEditingController _callsignCtrl;
+  late final TextEditingController _commentCtrl;
+  late final TextEditingController _latCtrl;
+  late final TextEditingController _lonCtrl;
+  late final FocusNode _callsignFocus;
+  late final FocusNode _commentFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = context.read<StationSettingsService>();
+    _callsignCtrl = TextEditingController(text: s.callsign);
+    _commentCtrl = TextEditingController(text: s.comment);
+    _latCtrl = TextEditingController(
+      text: s.manualLat != null ? s.manualLat!.toStringAsFixed(6) : '',
+    );
+    _lonCtrl = TextEditingController(
+      text: s.manualLon != null ? s.manualLon!.toStringAsFixed(6) : '',
+    );
+    _callsignFocus = FocusNode()
+      ..addListener(() {
+        if (!_callsignFocus.hasFocus) {
+          context.read<StationSettingsService>().setCallsign(
+            _callsignCtrl.text,
+          );
+        }
+      });
+    _commentFocus = FocusNode()
+      ..addListener(() {
+        if (!_commentFocus.hasFocus) {
+          context.read<StationSettingsService>().setComment(_commentCtrl.text);
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _callsignCtrl.dispose();
+    _commentCtrl.dispose();
+    _latCtrl.dispose();
+    _lonCtrl.dispose();
+    _callsignFocus.dispose();
+    _commentFocus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Column(
+    final service = context.watch<StationSettingsService>();
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader('My Station'),
-        ListTile(
-          title: Text('Callsign'),
-          trailing: Icon(Symbols.chevron_right),
+        const _SectionHeader('My Station'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: CallsignField(
+            controller: _callsignCtrl,
+            focusNode: _callsignFocus,
+            label: 'Callsign',
+            onChanged: (_) {}, // validation only; persist on focus loss
+          ),
         ),
-        ListTile(title: Text('SSID'), trailing: Icon(Symbols.chevron_right)),
-        ListTile(title: Text('Symbol'), trailing: Icon(Symbols.chevron_right)),
-        ListTile(title: Text('Comment'), trailing: Icon(Symbols.chevron_right)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: DropdownButtonFormField<int>(
+            decoration: const InputDecoration(
+              labelText: 'SSID',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Symbols.tag),
+            ),
+            initialValue: service.ssid,
+            items: List.generate(16, (i) {
+              final label = switch (i) {
+                0 => '0 — No suffix',
+                1 => '1 — Digipeater',
+                2 => '2 — Generic',
+                3 => '3 — Generic',
+                4 => '4 — Generic',
+                5 => '5 — Portable',
+                6 => '6 — Special',
+                7 => '7 — Handheld',
+                8 => '8 — Boat',
+                9 => '9 — Vehicle',
+                10 => '10 — Internet',
+                11 => '11 — Aircraft',
+                12 => '12 — Balloon',
+                13 => '13 — Bike',
+                14 => '14 — ATV/GPS',
+                _ => '15 — Satellite',
+              };
+              return DropdownMenuItem(value: i, child: Text(label));
+            }),
+            onChanged: (v) {
+              if (v != null) {
+                context.read<StationSettingsService>().setSsid(v);
+              }
+            },
+          ),
+        ),
+        ListTile(
+          dense: true,
+          title: const Text('Your address'),
+          subtitle: Text(
+            service.fullAddress.isEmpty ? '—' : service.fullAddress,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+        _SymbolPickerTile(
+          symbolTable: service.symbolTable,
+          symbolCode: service.symbolCode,
+          onChanged: (table, code) {
+            context.read<StationSettingsService>().setSymbol(table, code);
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: TextFormField(
+            controller: _commentCtrl,
+            focusNode: _commentFocus,
+            decoration: const InputDecoration(
+              labelText: 'Comment',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Symbols.comment),
+              hintText: 'e.g. Meridian APRS',
+              counterText: '',
+            ),
+            maxLength: 43,
+            onEditingComplete: () => FocusScope.of(context).unfocus(),
+            onChanged: (v) => setState(() {}),
+            buildCounter:
+                (_, {required currentLength, required isFocused, maxLength}) {
+                  return Text(
+                    '$currentLength / ${maxLength ?? 43}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  );
+                },
+          ),
+        ),
+        const _SectionHeader('Position Source'),
+        _LocationSourcePicker(latCtrl: _latCtrl, lonCtrl: _lonCtrl),
       ],
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Symbol picker
+// ---------------------------------------------------------------------------
+
+/// A curated list of common APRS symbols with human-readable names.
+class _AprsSymbolEntry {
+  const _AprsSymbolEntry(this.table, this.code, this.name);
+
+  final String table;
+  final String code;
+  final String name;
+}
+
+const _kAprsSymbols = <_AprsSymbolEntry>[
+  _AprsSymbolEntry('/', '>', 'Car'),
+  _AprsSymbolEntry('/', '-', 'House'),
+  _AprsSymbolEntry('/', '[', 'Person / Runner'),
+  _AprsSymbolEntry('/', '<', 'Motorcycle'),
+  _AprsSymbolEntry('/', 'b', 'Bicycle'),
+  _AprsSymbolEntry('/', 'k', 'Truck'),
+  _AprsSymbolEntry('/', 'u', 'Semi Truck'),
+  _AprsSymbolEntry('/', 'U', 'Bus'),
+  _AprsSymbolEntry('/', 'j', 'Jeep'),
+  _AprsSymbolEntry('/', 'v', 'Van'),
+  _AprsSymbolEntry('/', 'X', 'Helicopter'),
+  _AprsSymbolEntry('/', '^', 'Aircraft'),
+  _AprsSymbolEntry('/', "'", 'Small Aircraft'),
+  _AprsSymbolEntry('/', 'O', 'Balloon'),
+  _AprsSymbolEntry('/', 'Y', 'Sailboat'),
+  _AprsSymbolEntry('/', 's', 'Powerboat'),
+  _AprsSymbolEntry('/', '_', 'Weather Station'),
+  _AprsSymbolEntry('/', '#', 'Digipeater'),
+  _AprsSymbolEntry('/', 'r', 'Repeater Tower'),
+  _AprsSymbolEntry('/', 'a', 'Ambulance'),
+  _AprsSymbolEntry('/', 'h', 'Hospital'),
+  _AprsSymbolEntry('/', 'f', 'Fire Truck'),
+  _AprsSymbolEntry('/', 'd', 'Fire Department'),
+  _AprsSymbolEntry('/', 'P', 'Police'),
+  _AprsSymbolEntry('/', '!', 'Emergency'),
+  _AprsSymbolEntry('/', '+', 'Red Cross'),
+  _AprsSymbolEntry('/', '@', 'Hurricane'),
+  _AprsSymbolEntry('/', 'R', 'Recreational Vehicle'),
+  _AprsSymbolEntry('/', 'n', 'Network Node'),
+  _AprsSymbolEntry('/', '&', 'Gateway'),
+  _AprsSymbolEntry('/', '\$', 'Phone'),
+  _AprsSymbolEntry('\\', '-', 'House (overlay)'),
+  _AprsSymbolEntry('\\', '>', 'Car (overlay)'),
+  _AprsSymbolEntry('\\', '[', 'Person (overlay)'),
+];
+
+String _symbolName(String table, String code) {
+  for (final s in _kAprsSymbols) {
+    if (s.table == table && s.code == code) return s.name;
+  }
+  return 'Custom ($table$code)';
+}
+
+/// ListTile that shows the current symbol and opens a searchable picker dialog.
+class _SymbolPickerTile extends StatelessWidget {
+  const _SymbolPickerTile({
+    required this.symbolTable,
+    required this.symbolCode,
+    required this.onChanged,
+  });
+
+  final String symbolTable;
+  final String symbolCode;
+  final void Function(String table, String code) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      leading: Icon(
+        AprsSymbolWidget.iconDataForSymbol(symbolTable, symbolCode),
+        color: theme.colorScheme.primary,
+        size: 28,
+      ),
+      title: const Text('Symbol'),
+      subtitle: Text(_symbolName(symbolTable, symbolCode)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () async {
+        final result = await showDialog<_AprsSymbolEntry>(
+          context: context,
+          builder: (_) => _SymbolPickerDialog(
+            currentTable: symbolTable,
+            currentCode: symbolCode,
+          ),
+        );
+        if (result != null) {
+          onChanged(result.table, result.code);
+        }
+      },
+    );
+  }
+}
+
+class _SymbolPickerDialog extends StatefulWidget {
+  const _SymbolPickerDialog({
+    required this.currentTable,
+    required this.currentCode,
+  });
+
+  final String currentTable;
+  final String currentCode;
+
+  @override
+  State<_SymbolPickerDialog> createState() => _SymbolPickerDialogState();
+}
+
+class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
+  final _searchCtrl = TextEditingController();
+  List<_AprsSymbolEntry> _filtered = _kAprsSymbols;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch(String query) {
+    final q = query.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _kAprsSymbols
+          : _kAprsSymbols
+                .where((s) => s.name.toLowerCase().contains(q))
+                .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text('Choose Symbol', style: theme.textTheme.titleMedium),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Search…',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              onChanged: _onSearch,
+            ),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 380),
+            child: _filtered.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('No symbols found.'),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _filtered.length,
+                    itemBuilder: (context, index) {
+                      final entry = _filtered[index];
+                      final isSelected =
+                          entry.table == widget.currentTable &&
+                          entry.code == widget.currentCode;
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          AprsSymbolWidget.iconDataForSymbol(
+                            entry.table,
+                            entry.code,
+                          ),
+                          color: isSelected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        title: Text(entry.name),
+                        subtitle: Text(
+                          '${entry.table}${entry.code}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontFamily: 'monospace',
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                        selected: isSelected,
+                        selectedTileColor: theme.colorScheme.primaryContainer
+                            .withValues(alpha: 0.3),
+                        onTap: () => Navigator.of(context).pop(entry),
+                      );
+                    },
+                  ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Source picker: GPS (disabled with notice when unsupported) or Manual.
+class _LocationSourcePicker extends StatelessWidget {
+  const _LocationSourcePicker({required this.latCtrl, required this.lonCtrl});
+
+  final TextEditingController latCtrl;
+  final TextEditingController lonCtrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final svc = context.watch<StationSettingsService>();
+    final beaconing = context.watch<BeaconingService>();
+    final gpsUnavailable = beaconing.gpsUnsupported;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: SegmentedButton<LocationSource>(
+            segments: [
+              ButtonSegment(
+                value: LocationSource.gps,
+                icon: const Icon(Symbols.gps_fixed),
+                label: const Text('GPS'),
+                tooltip: gpsUnavailable
+                    ? 'GPS not available on this platform'
+                    : 'Use live GPS position',
+              ),
+              const ButtonSegment(
+                value: LocationSource.manual,
+                icon: Icon(Symbols.edit_location),
+                label: Text('Manual'),
+                tooltip: 'Use manually entered coordinates',
+              ),
+            ],
+            selected: {svc.locationSource},
+            onSelectionChanged: (s) {
+              if (gpsUnavailable && s.first == LocationSource.gps) return;
+              svc.setLocationSource(s.first);
+            },
+          ),
+        ),
+        if (gpsUnavailable && svc.locationSource == LocationSource.gps)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Row(
+              children: [
+                Icon(
+                  Symbols.warning,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'GPS is not available on this platform. '
+                    'Switch to Manual to enter coordinates.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (svc.locationSource == LocationSource.manual) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: latCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Latitude',
+                      border: OutlineInputBorder(),
+                      hintText: '39.0000',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    onEditingComplete: () => _savePosition(context),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: lonCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Longitude',
+                      border: OutlineInputBorder(),
+                      hintText: '-77.0000',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    onEditingComplete: () => _savePosition(context),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: FilledButton.tonal(
+                    onPressed: () => _savePosition(context),
+                    child: const Text('Set'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: OutlinedButton.icon(
+              icon: const Icon(Symbols.map, size: 18),
+              label: const Text('Pick on map…'),
+              onPressed: () => _openPicker(context, svc),
+            ),
+          ),
+          if (svc.hasManualPosition)
+            ListTile(
+              dense: true,
+              leading: const Icon(Symbols.location_on),
+              title: Text(
+                '${svc.manualLat!.toStringAsFixed(6)}°, '
+                '${svc.manualLon!.toStringAsFixed(6)}°',
+              ),
+              trailing: IconButton(
+                icon: const Icon(Symbols.location_off),
+                tooltip: 'Clear manual position',
+                color: Theme.of(context).colorScheme.error,
+                onPressed: () {
+                  latCtrl.clear();
+                  lonCtrl.clear();
+                  context.read<StationSettingsService>().clearManualPosition();
+                },
+              ),
+            ),
+          if (!svc.hasManualPosition)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'No position set — beacons will not transmit until '
+                'coordinates are entered above.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  void _savePosition(BuildContext context) {
+    final lat = double.tryParse(latCtrl.text.trim());
+    final lon = double.tryParse(lonCtrl.text.trim());
+    if (lat == null || lon == null) return;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+    context.read<StationSettingsService>().setManualPosition(lat, lon);
+    FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _openPicker(
+    BuildContext context,
+    StationSettingsService svc,
+  ) async {
+    final initial = svc.hasManualPosition
+        ? LatLng(svc.manualLat!, svc.manualLon!)
+        : null;
+    final result = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        // TODO(ios): CupertinoPageRoute
+        builder: (_) => LocationPickerScreen(initial: initial),
+      ),
+    );
+    if (result != null && context.mounted) {
+      latCtrl.text = result.latitude.toStringAsFixed(6);
+      lonCtrl.text = result.longitude.toStringAsFixed(6);
+      context.read<StationSettingsService>().setManualPosition(
+        result.latitude,
+        result.longitude,
+      );
+    }
   }
 }
 
@@ -321,21 +875,310 @@ class _BeaconingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    final beaconing = context.watch<BeaconingService>();
+    final tx = context.watch<TxService>();
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader('Beaconing'),
-        SwitchListTile(
-          title: Text('Smart beaconing'),
-          subtitle: Text(
-            'Adjusts beacon rate based on speed and heading change.',
+        const _SectionHeader('Beaconing'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              const Text('Mode'),
+              const SizedBox(width: 16),
+              SegmentedButton<BeaconMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: BeaconMode.manual,
+                    icon: Icon(Symbols.touch_app),
+                    label: Text('Manual'),
+                  ),
+                  ButtonSegment(
+                    value: BeaconMode.auto,
+                    icon: Icon(Symbols.timer),
+                    label: Text('Auto'),
+                  ),
+                  ButtonSegment(
+                    value: BeaconMode.smart,
+                    icon: Icon(Symbols.route),
+                    label: Text('Smart'),
+                  ),
+                ],
+                selected: {beaconing.mode},
+                onSelectionChanged: (modes) {
+                  if (modes.isNotEmpty) {
+                    context.read<BeaconingService>().setMode(modes.first);
+                  }
+                },
+              ),
+            ],
           ),
-          value: false,
-          onChanged: null, // Stub — not yet functional.
         ),
+        if (beaconing.mode == BeaconMode.auto) ...[
+          _IntervalTile(
+            intervalS: beaconing.autoIntervalS,
+            onChanged: (v) =>
+                context.read<BeaconingService>().setAutoInterval(v),
+          ),
+        ],
+        if (beaconing.mode == BeaconMode.smart) ...[
+          ListTile(
+            title: const Text('SmartBeaconing™ Parameters'),
+            subtitle: Text(
+              'Fast ${beaconing.smartParams.fastSpeedKmh.toInt()} km/h → '
+              '${beaconing.smartParams.fastRateS}s  •  '
+              'Slow ${beaconing.smartParams.slowSpeedKmh.toInt()} km/h → '
+              '${beaconing.smartParams.slowRateS}s',
+            ),
+            trailing: const Icon(Symbols.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                // TODO(ios): CupertinoPageRoute
+                builder: (_) => const _SmartBeaconingParamsScreen(),
+              ),
+            ),
+          ),
+        ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          child: Row(
+            children: [
+              const Text('Transmit via'),
+              const SizedBox(width: 16),
+              Tooltip(
+                message: !tx.tncAvailable ? 'TNC not connected' : '',
+                child: SegmentedButton<TxTransportPref>(
+                  segments: [
+                    const ButtonSegment(
+                      value: TxTransportPref.aprsIs,
+                      icon: Icon(Symbols.wifi),
+                      label: Text('APRS-IS'),
+                    ),
+                    ButtonSegment(
+                      value: TxTransportPref.tnc,
+                      icon: const Icon(Symbols.settings_input_antenna),
+                      label: const Text('RF / TNC'),
+                      enabled: tx.tncAvailable,
+                    ),
+                  ],
+                  selected: {
+                    tx.preference == TxTransportPref.auto
+                        ? tx.effective
+                        : tx.preference,
+                  },
+                  onSelectionChanged: (modes) {
+                    if (modes.isNotEmpty) {
+                      context.read<TxService>().setPreference(modes.first);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _IntervalTile extends StatelessWidget {
+  const _IntervalTile({required this.intervalS, required this.onChanged});
+
+  final int intervalS;
+  final ValueChanged<int> onChanged;
+
+  String _label(int s) {
+    if (s < 60) return '$s seconds';
+    if (s % 60 == 0) return '${s ~/ 60} minutes';
+    return '${s ~/ 60}m ${s % 60}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         ListTile(
-          title: Text('Interval'),
-          trailing: Icon(Symbols.chevron_right),
+          title: const Text('Beacon Interval'),
+          subtitle: Text(_label(intervalS)),
+          trailing: Text(
+            _label(intervalS),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Slider(
+            min: 30,
+            max: 3600,
+            divisions: ((3600 - 30) ~/ 30),
+            value: intervalS.toDouble(),
+            label: _label(intervalS),
+            onChanged: (v) => onChanged(v.round()),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Sub-screen for SmartBeaconing™ parameter tuning.
+class _SmartBeaconingParamsScreen extends StatefulWidget {
+  const _SmartBeaconingParamsScreen();
+
+  @override
+  State<_SmartBeaconingParamsScreen> createState() =>
+      _SmartBeaconingParamsScreenState();
+}
+
+class _SmartBeaconingParamsScreenState
+    extends State<_SmartBeaconingParamsScreen> {
+  late SmartBeaconingParams _params;
+
+  @override
+  void initState() {
+    super.initState();
+    _params = context.read<BeaconingService>().smartParams;
+  }
+
+  Future<void> _save() async {
+    await context.read<BeaconingService>().setSmartParams(_params);
+  }
+
+  Future<void> _reset() async {
+    await context.read<BeaconingService>().resetSmartDefaults();
+    setState(() {
+      _params = SmartBeaconingParams.defaults;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('SmartBeaconing™ Parameters')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _paramRow(
+            label: 'Fast Speed (km/h)',
+            value: _params.fastSpeedKmh,
+            min: 10,
+            max: 200,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(fastSpeedKmh: v));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Fast Rate (seconds)',
+            value: _params.fastRateS.toDouble(),
+            min: 10,
+            max: 600,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(fastRateS: v.round()));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Slow Speed (km/h)',
+            value: _params.slowSpeedKmh,
+            min: 1,
+            max: 30,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(slowSpeedKmh: v));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Slow Rate (seconds)',
+            value: _params.slowRateS.toDouble(),
+            min: 60,
+            max: 3600,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(slowRateS: v.round()));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Min Turn Time (seconds)',
+            value: _params.minTurnTimeS.toDouble(),
+            min: 5,
+            max: 120,
+            onChanged: (v) {
+              setState(
+                () => _params = _params.copyWith(minTurnTimeS: v.round()),
+              );
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Min Turn Angle (degrees)',
+            value: _params.minTurnAngleDeg,
+            min: 5,
+            max: 90,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(minTurnAngleDeg: v));
+              _save();
+            },
+          ),
+          _paramRow(
+            label: 'Turn Slope',
+            value: _params.turnSlope,
+            min: 10,
+            max: 600,
+            onChanged: (v) {
+              setState(() => _params = _params.copyWith(turnSlope: v));
+              _save();
+            },
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            icon: const Icon(Symbols.refresh),
+            label: const Text('Reset to Defaults'),
+            onPressed: _reset,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paramRow({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+  }) {
+    final displayValue = value == value.truncateToDouble()
+        ? '${value.toInt()}'
+        : value.toStringAsFixed(1);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.bodyMedium),
+              Text(
+                displayValue,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Slider(
+          min: min,
+          max: max,
+          value: value.clamp(min, max),
+          onChanged: onChanged,
         ),
       ],
     );
@@ -512,7 +1355,12 @@ class _TncSectionState extends State<_TncSection> {
   Widget build(BuildContext context) {
     final tncService = context.watch<TncService>();
     final theme = Theme.of(context);
-    final ports = tncService.availablePorts();
+    final isBlePlatform = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    final isSerialPlatform =
+        !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
+
+    // Only call availablePorts() on desktop — libserialport throws on Android.
+    final ports = isSerialPlatform ? tncService.availablePorts() : <String>[];
 
     // Ensure the selected port is still valid after a refresh.
     if (_selectedPort != null &&
@@ -520,8 +1368,6 @@ class _TncSectionState extends State<_TncSection> {
         !ports.contains(_selectedPort)) {
       _selectedPort = null;
     }
-
-    final isBlePlatform = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -861,6 +1707,118 @@ class _FieldLabel extends StatelessWidget {
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+class _HistorySection extends StatelessWidget {
+  const _HistorySection();
+
+  // Day options: 0 is the sentinel for "forever".
+  static const _dayOptions = [7, 14, 30, 90, 180, 365, 0];
+
+  static String _label(int days) => days == 0 ? 'Forever' : '$days days';
+
+  /// Snap [value] to the nearest option (handles defaults that may not be
+  /// in the list, e.g. after an app update changes defaults).
+  static int _snap(int value) => _dayOptions.reduce(
+    (a, b) => (a - value).abs() <= (b - value).abs() ? a : b,
+  );
+
+  Widget _dayDropdown({
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
+    return DropdownButton<int>(
+      value: _snap(value),
+      underline: const SizedBox.shrink(),
+      items: _dayOptions
+          .map((d) => DropdownMenuItem(value: d, child: Text(_label(d))))
+          .toList(),
+      onChanged: (d) {
+        if (d != null) onChanged(d);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stations = context.watch<StationService>();
+    final messages = context.watch<MessageService>();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('History'),
+
+        // Packet log retention
+        ListTile(
+          title: const Text('Packet log'),
+          subtitle: const Text('How long to keep received packets.'),
+          trailing: _dayDropdown(
+            value: stations.packetHistoryDays,
+            onChanged: stations.setPacketHistoryDays,
+          ),
+        ),
+
+        // Station history retention
+        ListTile(
+          title: const Text('Station history'),
+          subtitle: const Text('How long to remember heard stations.'),
+          trailing: _dayDropdown(
+            value: stations.stationHistoryDays,
+            onChanged: stations.setStationHistoryDays,
+          ),
+        ),
+
+        // Message history retention
+        ListTile(
+          title: const Text('Message history'),
+          subtitle: const Text('How long to keep sent and received messages.'),
+          trailing: _dayDropdown(
+            value: messages.messageHistoryDays,
+            onChanged: messages.setMessageHistoryDays,
+          ),
+        ),
+
+        // Clear actions
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Symbols.delete_sweep, size: 18),
+                label: const Text('Clear packet log'),
+                onPressed: () async {
+                  await context.read<StationService>().clearPacketLog();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Packet log cleared')),
+                    );
+                  }
+                },
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Symbols.location_off, size: 18),
+                label: const Text('Clear stations'),
+                onPressed: () async {
+                  await context.read<StationService>().clearStationHistory();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Station history cleared')),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -94,8 +94,10 @@ class TncService extends ChangeNotifier {
 
   /// Disconnect and release resources.
   Future<void> disconnect() async {
-    await _cancelBridge();
+    // Disconnect first so the final ConnectionStatus.disconnected event flows
+    // through _stateSub → _stateController before the bridge is torn down.
     await _transportManager.disconnect();
+    await _cancelBridge();
   }
 
   /// Returns available serial port names. Empty on non-desktop platforms.

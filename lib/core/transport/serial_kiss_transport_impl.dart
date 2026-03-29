@@ -40,6 +40,9 @@ class SerialKissTransport implements KissTncTransport {
   final _stateController = StreamController<ConnectionStatus>.broadcast();
   ConnectionStatus _status = ConnectionStatus.disconnected;
 
+  /// Guards against concurrent or re-entrant disconnect calls.
+  bool _disconnecting = false;
+
   @override
   Stream<Uint8List> get frameStream => _framesController.stream;
 
@@ -77,10 +80,14 @@ class SerialKissTransport implements KissTncTransport {
         onError: (Object e) {
           debugPrint('SerialKissTransport read error: $e');
           _setStatus(ConnectionStatus.error);
+          // Close the adapter immediately to stop the native reader thread
+          // from continuing to access the now-invalid port handle. Must be
+          // deferred via microtask because we are inside a stream listener.
+          Future.microtask(_handleDisconnect);
         },
         onDone: () {
           debugPrint('SerialKissTransport: port closed');
-          _setStatus(ConnectionStatus.disconnected);
+          Future.microtask(_handleDisconnect);
         },
       );
 
@@ -94,18 +101,45 @@ class SerialKissTransport implements KissTncTransport {
 
   @override
   Future<void> disconnect() async {
+    await _handleDisconnect();
+  }
+
+  @override
+  Future<void> sendFrame(Uint8List ax25Frame) async {
+    try {
+      _adapter.write(KissFramer.encode(ax25Frame));
+    } catch (e) {
+      debugPrint('SerialKissTransport sendFrame error: $e');
+      // Port is gone — trigger cleanup so the app stays in a consistent state.
+      Future.microtask(_handleDisconnect);
+      rethrow;
+    }
+  }
+
+  /// Idempotent teardown. Safe to call from stream callbacks, [disconnect],
+  /// or [sendFrame] error handlers.
+  Future<void> _handleDisconnect() async {
+    if (_disconnecting) return;
+    _disconnecting = true;
+
     await _readerSub?.cancel();
     _readerSub = null;
     await _frameSub?.cancel();
     _frameSub = null;
     _kissFramer.dispose();
-    _adapter.close();
-    _setStatus(ConnectionStatus.disconnected);
-  }
 
-  @override
-  Future<void> sendFrame(Uint8List ax25Frame) async {
-    _adapter.write(KissFramer.encode(ax25Frame));
+    try {
+      _adapter.close();
+    } catch (e) {
+      // The native port may already be in a bad state after a physical
+      // disconnect — swallow the error so the app does not crash.
+      debugPrint('SerialKissTransport adapter.close() error (ignored): $e');
+    }
+
+    if (_status != ConnectionStatus.error) {
+      _setStatus(ConnectionStatus.disconnected);
+    }
+    _disconnecting = false;
   }
 
   /// Returns the list of available serial port names on the host system.

@@ -287,3 +287,42 @@ A single `ThemeController` manages `themeMode` and `seedColor` as shared state. 
 **Rationale:** BLE GATT write operations are bounded by the ATT MTU. Mobilinkd TNC4 supports MTU 512, giving ~509-byte write payloads — large enough for any single AX.25 frame without chunking in practice. The fallback to 20 bytes ensures compatibility with devices that do not negotiate a larger MTU. Using write-with-response prevents flooding the TNC's receive buffer. Reusing `KissFramer` for reassembly means the BLE path has the same reassembly correctness guarantees as the serial path (verified by 23 existing KissFramer tests).
 
 **Consequences:** `BleTncTransport` is the primary TNC transport for iOS and Android. Mobilinkd TNC4 is the primary tested device. `BleDeviceAdapter` (an abstract interface mirroring `SerialPortAdapter`) allows `BleTncTransport` to be unit-tested with a `FakeBleDeviceAdapter` without requiring a physical BLE stack.
+
+---
+
+## ADR-021: SmartBeaconing defaults = APRSdroid values (v0.5)
+
+**Status:** Accepted
+**Date:** 2026-03-28
+
+**Decision:** `SmartBeaconingParams.defaults` uses the same parameter values as APRSdroid: fastSpeed=100 km/h, fastRate=180 s, slowSpeed=5 km/h, slowRate=1800 s, minTurnTime=15 s, minTurnAngle=28°, turnSlope=255.
+
+**Rationale:** APRSdroid's defaults are widely used by mobile operators and derived from the original SmartBeaconing™ specification by HamHUD Nicely Donee LLC. Using the same values means Meridian-transmitted positions appear at expected intervals to operators already familiar with APRSdroid. Deviating from these values would require user education with no clear benefit.
+
+**Consequences:** `SmartBeaconingParams` is a `const` value object; `defaults` is a `static const`. Users can override all parameters via the Beaconing settings screen; the Reset Defaults button restores these values.
+
+---
+
+## ADR-022: Message retry backoff = APRS spec §14 intervals (v0.5)
+
+**Status:** Accepted
+**Date:** 2026-03-28
+
+**Decision:** `MessageService` retries unacked outbound messages at fixed delays of 30, 60, 120, 240, and 480 seconds (5 attempts total). After the 5th retry without acknowledgement, the message status transitions to `failed`.
+
+**Rationale:** APRS spec §14 recommends retrying unacknowledged messages at increasing intervals but does not mandate specific values. The 30/60/120/240/480 sequence is the most common implementation in the APRS ecosystem (seen in Dire Wolf, APRSdroid, and Xastir). Using the same intervals keeps interoperability predictable — a far-end station implementing the same backoff will not flood the channel with simultaneous retransmissions.
+
+**Consequences:** Each pending message holds one `Timer`. On ACK or REJ receipt the timer is cancelled. After `failed`, the user must manually resend. The total window before failure is ~15 minutes, which is intentionally long to handle intermittent connectivity.
+
+---
+
+## ADR-023: Global (not per-station) TX transport preference (v0.5)
+
+**Status:** Accepted
+**Date:** 2026-03-28
+
+**Decision:** `TxService` holds a single `TxTransportPref { auto, aprsIs, tnc }` that applies to all outgoing packets — position beacons and messages alike. There is no per-destination or per-packet-type override.
+
+**Rationale:** Amateur radio operators almost always have one TX path available at a time (either connected to a TNC or not). A per-packet or per-destination preference would add UI complexity with no real-world benefit for the v0.5 use case. `auto` mode (default) provides sensible behaviour: use TNC when connected, fall back to APRS-IS otherwise. Advanced users who want explicit control can select `aprsIs` or `tnc` in Settings.
+
+**Consequences:** `TxService` subscribes to `TncService.connectionState`. On TNC disconnect while the effective transport is TNC, it emits `TxEventTncDisconnected` (drives a banner) without persisting a fallback — the stored preference remains `tnc` so the switch-back offer can be presented on reconnect. This means a TNC disconnection while Meridian is backgrounded is surfaced to the user on next interaction rather than silently discarded.

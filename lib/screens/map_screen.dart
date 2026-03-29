@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/packet/station.dart';
 import '../services/station_service.dart';
 import '../services/tnc_service.dart';
+import '../services/tx_service.dart';
 import '../ui/layout/responsive_layout.dart';
 import '../theme/meridian_colors.dart';
 import '../theme/theme_controller.dart';
@@ -59,6 +60,7 @@ class _MapScreenState extends State<MapScreen> {
   late ConnectionStatus _connectionStatus;
   ConnectionStatus _tncConnectionStatus = ConnectionStatus.disconnected;
   StreamSubscription<ConnectionStatus>? _tncStatusSub;
+  StreamSubscription<TxEvent>? _txEventSub;
   bool _northUpLocked = true;
 
   // Tile URL constants.
@@ -72,6 +74,8 @@ class _MapScreenState extends State<MapScreen> {
     _service = widget.service;
     _connectionStatus = _service.currentConnectionStatus;
     _service.stationUpdates.listen(_onStationsUpdated);
+    // Seed markers from persisted stations already loaded before runApp.
+    _onStationsUpdated(_service.currentStations);
     _service.connectionState.listen((status) {
       if (!mounted) return;
       final wasConnecting = _connectionStatus == ConnectionStatus.connecting;
@@ -92,6 +96,7 @@ class _MapScreenState extends State<MapScreen> {
     _service.start().catchError((Object e) {
       debugPrint('APRS-IS connection failed: $e');
     });
+    _txEventSub = context.read<TxService>().events.listen(_onTxEvent);
     _mapController.mapEventStream
         .where((e) => e is MapEventMoveEnd)
         .cast<MapEventMoveEnd>()
@@ -103,8 +108,57 @@ class _MapScreenState extends State<MapScreen> {
     _filterDebounce?.cancel();
     _markerDebounce?.cancel();
     _tncStatusSub?.cancel();
+    _txEventSub?.cancel();
     _service.stop();
     super.dispose();
+  }
+
+  void _onTxEvent(TxEvent event) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearMaterialBanners();
+
+    final txService = context.read<TxService>();
+
+    if (event is TxEventTncDisconnected) {
+      // Only mention APRS-IS fallback if IS is actually connected.
+      final content = txService.aprsIsAvailable
+          ? 'TNC disconnected — switched to APRS-IS'
+          : 'TNC disconnected';
+      // TODO(ios): use Cupertino-styled banner
+      messenger.showMaterialBanner(
+        MaterialBanner(
+          content: Text(content),
+          actions: [
+            TextButton(
+              onPressed: messenger.clearMaterialBanners,
+              child: const Text('Dismiss'),
+            ),
+          ],
+        ),
+      );
+    } else if (event is TxEventTncReconnected) {
+      // If APRS-IS is not connected there is no meaningful choice — skip banner.
+      if (!txService.aprsIsAvailable) return;
+      messenger.showMaterialBanner(
+        MaterialBanner(
+          content: const Text('TNC connected — switch to RF?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                context.read<TxService>().setPreference(TxTransportPref.tnc);
+                messenger.clearMaterialBanners();
+              },
+              child: const Text('Switch to RF'),
+            ),
+            TextButton(
+              onPressed: messenger.clearMaterialBanners,
+              child: const Text('Stay on APRS-IS'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _onMapMoveEnd(MapEventMoveEnd event) {

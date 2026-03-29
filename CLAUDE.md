@@ -52,7 +52,12 @@ See `docs/ARCHITECTURE.md` for full detail.
 | v0.5 — Beaconing | Transmit path, position beaconing, message sending |
 | v1.0 — Polish | UI refinement, settings, documentation, onboarding |
 
-**Current status: v0.4 BLE complete. `KissTncTransport` interface and `TransportManager` introduced; `BleTncTransport` (flutter_blue_plus, Mobilinkd-compatible) implemented for iOS/Android. Physical device validation with Mobilinkd TNC4 pending. Three-tier platform theme architecture complete — Android (M3 Expressive + Dynamic Color), iOS (Cupertino, pending iOS simulator validation), Desktop (M3 static brand).**
+**Current status: v0.5 Beaconing complete. TX capability added for the first time: `AprsEncoder` + `Ax25Encoder` (pure Dart), `SmartBeaconing` algorithm, `TxService` (global TX router), `BeaconingService` (Manual/Auto/Smart modes, geolocator GPS), `MessageService` (threaded conversations, APRS §14 retry/ACK). Messages screens, BeaconFAB updates, scaffold nav wiring, and TNC disconnect banners implemented. 252 tests passing. Passcode secure storage and physical TX validation deferred to v1.0. Previous: v0.4 BLE — `KissTncTransport` + `TransportManager` + `BleTncTransport` (Mobilinkd-compatible). Three-tier platform theme — Android (M3 Expressive + Dynamic Color), iOS (Cupertino, pending simulator validation), Desktop (M3 static brand).**
+
+**Conventions added in v0.5:**
+- `TODO(tocall)` — marks `APZMDN` destination; register with WB4APR before v1.0 release
+- `TODO(ios)` — marks `MaterialPageRoute` calls that should become `CupertinoPageRoute` once iOS theme is validated
+- `geolocator` package added for GPS access (required permissions: Android `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`, iOS `NSLocationWhenInUseUsageDescription`, macOS entitlement + plist key)
 
 See `docs/ROADMAP.md` for per-milestone task breakdowns.
 

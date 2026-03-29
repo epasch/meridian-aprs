@@ -49,10 +49,23 @@ class DefaultSerialPortAdapter implements SerialPortAdapter {
 
   @override
   void close() {
-    _reader?.close();
+    // Close the OS file descriptor first. On Linux this causes any thread
+    // blocked in read() on this fd to return EBADF immediately, allowing the
+    // native SerialPortReader thread to exit its loop before we try to free
+    // its resources. Reversing this order (reader first) leaves the thread
+    // mid-read when libserialport frees the buffer → heap corruption crash.
+    try {
+      _port.close();
+    } catch (_) {}
+    try {
+      _reader?.close();
+    } catch (_) {
+      // Reader may already be closed after a physical disconnect.
+    }
     _reader = null;
-    _port.close();
-    _port.dispose();
+    try {
+      _port.dispose();
+    } catch (_) {}
   }
 
   int _parityConstant(String parity) {

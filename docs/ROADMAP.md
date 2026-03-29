@@ -9,7 +9,7 @@
 | UI Foundation | Theme system, adaptive scaffold, core widgets, onboarding | ✅ Complete |
 | v0.3 — TNC | KISS over USB serial, desktop first | ✅ Complete |
 | v0.4 — BLE | KISS over BLE, mobile platforms | ✅ Complete |
-| v0.5 — Beaconing | Transmit path, position beaconing, message sending | ⬜ Planned |
+| v0.5 — Beaconing | Transmit path, position beaconing, message sending | ✅ Complete |
 | v1.0 — Polish | UI refinement, settings, documentation, onboarding | ⬜ Planned |
 
 ---
@@ -101,14 +101,25 @@ Goal: Connect to a BLE-capable TNC (e.g. Mobilinkd) on mobile. Extends the `TncP
 
 ## v0.5 — Beaconing
 
-Goal: Transmit position beacons and send messages.
+Goal: Transmit position beacons and send/receive APRS messages.
 
-- [ ] AX.25/APRS encoder (position, message types)
-- [ ] APRS-IS login with callsign + passcode
-- [ ] Position beacon UI (manual + interval)
-- [ ] Message compose and send
-- [ ] Message ACK handling
-- [ ] Passcode stored in platform secure storage (not plaintext)
+- [x] `AprsEncoder` — pure Dart APRS-IS text encoder (position, message, ACK, REJ)
+- [x] `Ax25Encoder` — pure Dart AX.25 UI frame encoder (round-trips with `Ax25Parser`)
+- [x] `SmartBeaconing` — pure Dart SmartBeaconing™ algorithm (interval + turn trigger)
+- [x] `StationSettingsService` — My Station prefs (callsign, SSID, symbol, comment) with ChangeNotifier
+- [x] `TxService` — global TX transport router (auto/APRS-IS/TNC preference, TNC disconnect events)
+- [x] `BeaconingService` — Manual / Auto / SmartBeaconing™ modes, GPS via geolocator
+- [x] `MessageService` — threaded conversations, APRS §14 retry scheduler, ACK/REJ handling, duplicate detection
+- [x] Settings — My Station section (callsign, SSID, symbol, comment), Beaconing section (mode, interval, SmartBeaconing params, TX transport toggle)
+- [x] BeaconFAB — last-beacon timestamp, mode label, long-press cooldown guard
+- [x] Messages screens — thread list (`MessagesScreen`), chat thread (`MessageThreadScreen`), compose sheet
+- [x] Scaffold nav — Messages destination wired on all three scaffolds; unread badge
+- [x] TNC disconnect/reconnect banners in `MapScreen`
+- [x] GPS platform permissions (Android, iOS, macOS)
+- [x] Tests: 252 passing (encoder, AX.25 encoder, SmartBeaconing, MessageService, widget test)
+- [ ] APRS-IS login with callsign + passcode (passcode field is in onboarding; TX auth deferred to v1.0)
+- [ ] Passcode stored in platform secure storage — deferred to v1.0
+- [ ] Physical device validation — TX beacon on APRS-IS + TNC (pending)
 
 ---
 
