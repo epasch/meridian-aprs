@@ -381,6 +381,22 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       );
     }
 
+    final isBleConnected =
+        tncStatus == ConnectionStatus.connected &&
+        context.read<TncService>().activeTransportType == TransportType.ble;
+
+    if (isBleConnected) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Text(
+          'Connected — disconnect from the card above.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+
     final tncService = context.read<TncService>();
     // Lazy: only instantiate BleScannerSheet when this tab is active.
     return Padding(

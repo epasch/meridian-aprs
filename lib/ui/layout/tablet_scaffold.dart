@@ -65,46 +65,47 @@ class TabletScaffold extends StatefulWidget {
 class _TabletScaffoldState extends State<TabletScaffold> {
   // Indices 0-4 correspond to Map, Log, Stations, Messages, Connection.
   int _selectedIndex = 0;
+  bool _locating = false;
 
   void _navigateToConnection() {
     setState(() => _selectedIndex = 4);
   }
 
   Future<void> _centerOnLocation() async {
-    // Try to check if location services work at all — desktop platforms
-    // throw UnimplementedError if geolocator has no implementation.
-    bool serviceEnabled;
+    if (_locating) return;
+    setState(() => _locating = true);
     try {
-      serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    } on UnimplementedError {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location is not available on this platform.'),
-        ),
-      );
-      return;
-    }
-    if (!serviceEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location services are disabled.')),
-      );
-      return;
-    }
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permission denied.')),
-      );
-      return;
-    }
-    try {
+      bool serviceEnabled;
+      try {
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      } on UnimplementedError {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location is not available on this platform.'),
+          ),
+        );
+        return;
+      }
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location services are disabled.')),
+        );
+        return;
+      }
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permission denied.')),
+        );
+        return;
+      }
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -120,6 +121,8 @@ class _TabletScaffoldState extends State<TabletScaffold> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Could not get location: $e')));
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
   }
 
@@ -168,9 +171,15 @@ class _TabletScaffoldState extends State<TabletScaffold> {
             onPressed: _searchCallsign,
           ),
           IconButton(
-            icon: const Icon(Symbols.my_location),
+            icon: _locating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Symbols.my_location),
             tooltip: 'Center on my location',
-            onPressed: _centerOnLocation,
+            onPressed: _locating ? null : _centerOnLocation,
           ),
           IconButton(
             icon: const Icon(Symbols.settings),

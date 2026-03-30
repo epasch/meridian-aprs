@@ -10,6 +10,7 @@
 | v0.3 — TNC | KISS over USB serial, desktop first | ✅ Complete |
 | v0.4 — BLE | KISS over BLE, mobile platforms | ✅ Complete |
 | v0.5 — Beaconing | Transmit path, position beaconing, message sending | ✅ Complete |
+| v0.6 — Connection UI & Map Polish | Connection screen, map improvements | ✅ Complete |
 | v1.0 — Polish | UI refinement, settings, documentation, onboarding | ⬜ Planned |
 
 ---
@@ -127,7 +128,7 @@ Goal: Transmit position beacons and send/receive APRS messages.
 
 Goal: Promote Connection to a first-class navigation destination; targeted map improvements.
 
-**Status: In progress**
+**Status: Complete**
 
 ### feat/v0.6-connection-screen
 - [x] `ConnectionNavIcon` widget — reactive nav icon (Selector2, signal/warning/muted)
@@ -135,7 +136,7 @@ Goal: Promote Connection to a first-class navigation destination; targeted map i
   - Active Connections section (APRS-IS + TNC cards, TX badge, Disconnect)
   - Platform-adaptive segmented control (CupertinoSlidingSegmentedControl/SegmentedButton)
   - APRS-IS tab (read-only server info, connect/disconnect)
-  - BLE TNC tab (BleScannerSheet inline, lazy instantiation)
+  - BLE TNC tab (BleScannerSheet inline, lazy instantiation; connected state: "Connected — disconnect from the card above")
   - Serial TNC tab (port/baud/connect — desktop only)
 - [x] Mobile: 5th nav destination (Connection); status pill taps navigate to tab
 - [x] Tablet: Connection converted from transient sheet to real IndexedStack destination
@@ -145,8 +146,16 @@ Goal: Promote Connection to a first-class navigation destination; targeted map i
 - [ ] Physical device validation
 
 ### feat/v0.6-map-polish
-- [ ] "Not connected" nudge chip overlay on map (AnimatedOpacity, tap → ConnectionScreen)
-- [ ] Station marker tap targets: 36 → 44 px
+- [x] "Not connected" nudge chip overlay on map (AnimatedOpacity, tap → ConnectionScreen)
+- [x] Station marker tap targets: 36 → 44 px
+- [x] Connection screen UX: duplicate Disconnect buttons removed; BLE back-arrow fix (`showBackButton` param)
+- [x] Callsign search — `StationSearchDelegate` (`SearchDelegate<Station?>`); Nominatim geocoding; `showSearch` integration; map pan on result
+- [x] Center-on-location FAB — GPS on mobile/tablet via geolocator; desktop falls back to `LocationPickerScreen` address picker
+- [x] `BeaconFAB` loading spinner while sending (`Future<void> onTap`, `_isSending` state)
+- [x] Location button loading spinner on all three scaffold tiers
+- [x] TX transport selector reflects effective transport (falls back when TNC disconnected, not stored preference)
+- [x] TNC section removed from Settings screen (Connection screen is canonical)
+- [x] `connection_sheet.dart` deleted (orphaned dead code)
 
 ---
 

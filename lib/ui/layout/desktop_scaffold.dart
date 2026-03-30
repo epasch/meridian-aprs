@@ -66,51 +66,58 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
   int _selectedIndex = 0;
   bool _navRailExpanded = true;
   bool _panelVisible = true;
+  bool _locating = false;
 
   void _navigateToConnection() {
     setState(() => _selectedIndex = 3);
   }
 
   Future<void> _centerOnLocation() async {
-    // Try GPS first — works on macOS (Core Location) and may work on some
-    // Linux setups. Falls back to the address picker when unavailable.
+    if (_locating) return;
+    setState(() => _locating = true);
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (serviceEnabled) {
-        LocationPermission permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
+      // Try GPS first — works on macOS (Core Location) and may work on some
+      // Linux setups. Falls back to the address picker when unavailable.
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+          }
+          if (permission != LocationPermission.denied &&
+              permission != LocationPermission.deniedForever) {
+            final position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+              ),
+            );
+            if (!mounted) return;
+            widget.mapController.move(
+              LatLng(position.latitude, position.longitude),
+              13.0,
+            );
+            return;
+          }
         }
-        if (permission != LocationPermission.denied &&
-            permission != LocationPermission.deniedForever) {
-          final position = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-            ),
-          );
-          if (!mounted) return;
-          widget.mapController.move(
-            LatLng(position.latitude, position.longitude),
-            13.0,
-          );
-          return;
-        }
+      } on UnimplementedError {
+        // No geolocator implementation on this platform (e.g. Linux) — fall
+        // through to the address picker below.
+      } catch (_) {
+        // Any other GPS error — fall through to the address picker.
       }
-    } on UnimplementedError {
-      // No geolocator implementation on this platform (e.g. Linux) — fall
-      // through to the address picker below.
-    } catch (_) {
-      // Any other GPS error — fall through to the address picker.
-    }
 
-    // GPS unavailable or denied: open the address/map picker instead.
-    if (!mounted) return;
-    final result = await Navigator.push<LatLng>(
-      context,
-      MaterialPageRoute(builder: (_) => const LocationPickerScreen()),
-    );
-    if (result != null && mounted) {
-      widget.mapController.move(result, 13.0);
+      // GPS unavailable or denied: open the address/map picker instead.
+      if (!mounted) return;
+      final result = await Navigator.push<LatLng>(
+        context,
+        MaterialPageRoute(builder: (_) => const LocationPickerScreen()),
+      );
+      if (result != null && mounted) {
+        widget.mapController.move(result, 13.0);
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
   }
 
@@ -161,9 +168,15 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             onPressed: _searchCallsign,
           ),
           IconButton(
-            icon: const Icon(Symbols.my_location),
+            icon: _locating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Symbols.my_location),
             tooltip: 'Center on my location',
-            onPressed: _centerOnLocation,
+            onPressed: _locating ? null : _centerOnLocation,
           ),
           IconButton(
             icon: const Icon(Symbols.settings),
