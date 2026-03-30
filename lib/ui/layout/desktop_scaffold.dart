@@ -1,13 +1,14 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:provider/provider.dart';
 
+import '../../core/packet/station.dart';
+import '../../screens/connection_screen.dart';
+import '../../screens/location_picker_screen.dart';
 import '../../screens/messages_screen.dart';
 import '../../screens/packet_log_screen.dart';
 import '../../screens/station_list_screen.dart';
@@ -16,17 +17,16 @@ import '../../services/message_service.dart';
 import '../../services/station_service.dart';
 import '../../services/tnc_service.dart';
 import '../../theme/meridian_colors.dart';
-import '../widgets/connection_sheet.dart';
-import '../widgets/meridian_bottom_sheet.dart';
-import '../widgets/meridian_status_pill.dart';
+import '../widgets/connection_nav_icon.dart';
+import '../widgets/station_search_delegate.dart';
 import 'meridian_map.dart';
 
 /// Desktop (> 1024 px) scaffold: expanded navigation rail (240 px) + map +
 /// side panel.
 ///
 /// The [NavigationRail] provides in-place tab switching via [IndexedStack]
-/// for Map, Stations, and Messages. Connection opens a bottom sheet; Settings
-/// pushes a full-screen route.
+/// for Map, Stations, Messages, and Connection. Settings pushes a full-screen
+/// route.
 class DesktopScaffold extends StatefulWidget {
   const DesktopScaffold({
     super.key,
@@ -62,23 +62,75 @@ class DesktopScaffold extends StatefulWidget {
 }
 
 class _DesktopScaffoldState extends State<DesktopScaffold> {
-  // Indices 0-2 correspond to Map, Stations, Messages.
+  // Indices 0-3 correspond to Map, Stations, Messages, Connection.
   int _selectedIndex = 0;
   bool _navRailExpanded = true;
   bool _panelVisible = true;
+  bool _locating = false;
 
-  void _showConnectionSheet(BuildContext context) {
-    showModalBottomSheet(
+  void _navigateToConnection() {
+    setState(() => _selectedIndex = 3);
+  }
+
+  Future<void> _centerOnLocation() async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    try {
+      // Try GPS first — works on macOS (Core Location) and may work on some
+      // Linux setups. Falls back to the address picker when unavailable.
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+          }
+          if (permission != LocationPermission.denied &&
+              permission != LocationPermission.deniedForever) {
+            final position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+              ),
+            );
+            if (!mounted) return;
+            widget.mapController.move(
+              LatLng(position.latitude, position.longitude),
+              13.0,
+            );
+            return;
+          }
+        }
+      } on UnimplementedError {
+        // No geolocator implementation on this platform (e.g. Linux) — fall
+        // through to the address picker below.
+      } catch (_) {
+        // Any other GPS error — fall through to the address picker.
+      }
+
+      // GPS unavailable or denied: open the address/map picker instead.
+      if (!mounted) return;
+      final result = await Navigator.push<LatLng>(
+        context,
+        MaterialPageRoute(builder: (_) => const LocationPickerScreen()),
+      );
+      if (result != null && mounted) {
+        widget.mapController.move(result, 13.0);
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _searchCallsign() async {
+    // TODO(ios): replace with Cupertino search UI once iOS theme is validated
+    final station = await showSearch<Station?>(
       context: context,
-      isScrollControlled: true,
-      builder: (_) => MeridianBottomSheet(
-        initialSize: 0.65,
-        child: ConnectionSheet(
-          stationService: widget.service,
-          tncService: widget.tncService,
-        ),
-      ),
+      delegate: StationSearchDelegate(stations: widget.service.currentStations),
     );
+    if (station != null && mounted) {
+      setState(() => _selectedIndex = 0);
+      widget.mapController.move(LatLng(station.lat, station.lon), 13.0);
+    }
   }
 
   @override
@@ -92,18 +144,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
         ),
         title: const Text('Meridian'),
         actions: [
-          MeridianStatusPill(
-            status: widget.connectionStatus,
-            label: 'APRS-IS',
-            onTap: () => _showConnectionSheet(context),
-          ),
-          if (!kIsWeb &&
-              (Platform.isLinux || Platform.isMacOS || Platform.isWindows))
-            MeridianStatusPill(
-              label: 'TNC',
-              status: widget.tncConnectionStatus,
-              onTap: () => _showConnectionSheet(context),
-            ),
+          _ConnectionStatusChip(onTap: _navigateToConnection),
           IconButton(
             icon: Icon(
               widget.northUpLocked ? Symbols.navigation : Symbols.explore,
@@ -122,6 +163,22 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
           ),
           _BeaconToolbarButton(),
           IconButton(
+            icon: const Icon(Symbols.search),
+            tooltip: 'Search callsign',
+            onPressed: _searchCallsign,
+          ),
+          IconButton(
+            icon: _locating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Symbols.my_location),
+            tooltip: 'Center on my location',
+            onPressed: _locating ? null : _centerOnLocation,
+          ),
+          IconButton(
             icon: const Icon(Symbols.settings),
             tooltip: 'Settings',
             onPressed: widget.onNavigateToSettings,
@@ -136,12 +193,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             minExtendedWidth: 240,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 3) {
-                // Connection — transient action; open sheet without changing
-                // the persistent rail selection.
-                _showConnectionSheet(context);
-                return;
-              } else if (i == 4) {
+              if (i == 4) {
                 widget.onNavigateToSettings();
                 return;
               }
@@ -173,8 +225,8 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                 label: const Text('Messages'),
               ),
               const NavigationRailDestination(
-                icon: Icon(Symbols.router),
-                selectedIcon: Icon(Symbols.router),
+                icon: ConnectionNavIcon(),
+                selectedIcon: ConnectionNavIcon(),
                 label: Text('Connection'),
               ),
               const NavigationRailDestination(
@@ -201,6 +253,12 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                         initialCenter: widget.initialCenter,
                         initialZoom: widget.initialZoom,
                         northUpLocked: widget.northUpLocked,
+                        isAnyConnected:
+                            widget.connectionStatus ==
+                                ConnectionStatus.connected ||
+                            widget.tncConnectionStatus ==
+                                ConnectionStatus.connected,
+                        onNotConnectedTap: _navigateToConnection,
                       ),
                     ),
                     AnimatedSize(
@@ -224,11 +282,80 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
 
                 // Index 2 — Messages.
                 const MessagesScreen(),
+
+                // Index 3 — Connection.
+                const ConnectionScreen(),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Compact connection status chip for the desktop AppBar.
+///
+/// Shows combined APRS-IS + TNC state in a single [ActionChip]. Tapping
+/// navigates to the Connection screen.
+class _ConnectionStatusChip extends StatelessWidget {
+  const _ConnectionStatusChip({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector2<
+      StationService,
+      TncService,
+      (ConnectionStatus, ConnectionStatus)
+    >(
+      selector: (_, ss, tnc) => (ss.currentConnectionStatus, tnc.currentStatus),
+      builder: (context, statuses, _) {
+        final (aprsStatus, tncStatus) = statuses;
+        final aprsConnected = aprsStatus == ConnectionStatus.connected;
+        final tncConnected = tncStatus == ConnectionStatus.connected;
+        final anyError =
+            aprsStatus == ConnectionStatus.error ||
+            tncStatus == ConnectionStatus.error;
+        final anyConnecting =
+            aprsStatus == ConnectionStatus.connecting ||
+            tncStatus == ConnectionStatus.connecting;
+
+        final String label;
+        final Color color;
+        if (aprsConnected && tncConnected) {
+          label = 'APRS-IS + TNC';
+          color = MeridianColors.signal;
+        } else if (aprsConnected) {
+          label = 'APRS-IS';
+          color = MeridianColors.signal;
+        } else if (tncConnected) {
+          label = 'TNC';
+          color = MeridianColors.signal;
+        } else if (anyError) {
+          label = 'Error';
+          color = MeridianColors.warning;
+        } else if (anyConnecting) {
+          label = 'Connecting\u2026';
+          color = MeridianColors.warning;
+        } else {
+          label = 'Not connected';
+          color = Theme.of(context).colorScheme.onSurfaceVariant;
+        }
+
+        return ActionChip(
+          avatar: Icon(Symbols.router, size: 16, color: color),
+          label: Text(label),
+          labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+          onPressed: onTap,
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+        );
+      },
     );
   }
 }

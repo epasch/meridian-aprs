@@ -208,8 +208,8 @@ class _MapScreenState extends State<MapScreen> {
 
   Marker _buildMarker(Station s) => Marker(
     point: LatLng(s.lat, s.lon),
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     child: GestureDetector(
       onTap: () => showModalBottomSheet(
         context: context,
@@ -220,7 +220,7 @@ class _MapScreenState extends State<MapScreen> {
         child: AprsSymbolWidget(
           symbolTable: s.symbolTable,
           symbolCode: s.symbolCode,
-          size: 36,
+          size: 44,
           color: _markerColor(s.symbolCode),
         ),
       ),

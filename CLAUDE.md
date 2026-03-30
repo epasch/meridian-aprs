@@ -52,7 +52,7 @@ See `docs/ARCHITECTURE.md` for full detail.
 | v0.5 — Beaconing | Transmit path, position beaconing, message sending |
 | v1.0 — Polish | UI refinement, settings, documentation, onboarding |
 
-**Current status: v0.5 Beaconing complete. TX capability added for the first time: `AprsEncoder` + `Ax25Encoder` (pure Dart), `SmartBeaconing` algorithm, `TxService` (global TX router), `BeaconingService` (Manual/Auto/Smart modes, geolocator GPS), `MessageService` (threaded conversations, APRS §14 retry/ACK). Messages screens, BeaconFAB updates, scaffold nav wiring, and TNC disconnect banners implemented. 252 tests passing. Passcode secure storage and physical TX validation deferred to v1.0. Previous: v0.4 BLE — `KissTncTransport` + `TransportManager` + `BleTncTransport` (Mobilinkd-compatible). Three-tier platform theme — Android (M3 Expressive + Dynamic Color), iOS (Cupertino, pending simulator validation), Desktop (M3 static brand).**
+**Current status: v0.7 planning. v0.6 Connection UI & Map Polish complete — `ConnectionScreen` first-class nav destination on all three scaffold tiers; `ConnectionNavIcon` (reactive Selector2 nav icon); `_ConnectionStatusChip` in desktop AppBar; callsign search (Nominatim + `showSearch`); center-on-location (GPS on mobile/tablet, address picker fallback on desktop); `BeaconFAB` and location button loading spinners; TX transport selector reflects effective transport; TNC settings consolidated to Connection screen; `connection_sheet.dart` removed. 274 tests passing. ADRs 001–024 in `docs/DECISIONS.md`.**
 
 **Conventions added in v0.5:**
 - `TODO(tocall)` — marks `APZMDN` destination; register with WB4APR before v1.0 release
@@ -154,13 +154,14 @@ All three tiers fully implemented. iOS pending simulator validation.
 | File | Class | Description |
 |---|---|---|
 | `aprs_symbol_widget.dart` | `AprsSymbolWidget` | APRS symbol rendering; Material icons now, sprite sheet at v1.0 |
-| `beacon_fab.dart` | `BeaconFAB` | Large FAB; idle=primary blue, beaconing=danger red + pulse animation |
+| `beacon_fab.dart` | `BeaconFAB` | Large FAB; idle=primary blue, beaconing=danger red + pulse animation; spinner while sending |
 | `callsign_field.dart` | `CallsignField` | Validated callsign TextFormField; regex + inline error |
 | `meridian_bottom_sheet.dart` | `MeridianBottomSheet` | Draggable bottom sheet with drag handle; theming wrapper |
 | `meridian_status_pill.dart` | `MeridianStatusPill` | Connection status pill; green/amber/red dot + label; pulsing on connecting |
 | `packet_detail_sheet.dart` | `PacketDetailSheet` | Full decoded packet field view + selectable raw line |
 | `station_info_sheet.dart` | `StationInfoSheet` | Station summary bottom sheet (callsign, symbol, comment, last heard) |
 | `station_list_tile.dart` | `StationListTile` | ListTile for station list; symbol + callsign + relative timestamp |
+| `station_search_delegate.dart` | `StationSearchDelegate` | `SearchDelegate<Station?>` for callsign search; Nominatim-powered map pan |
 
 ### Screens (`lib/screens/`)
 
@@ -173,7 +174,7 @@ All three tiers fully implemented. iOS pending simulator validation.
 | `onboarding/onboarding_welcome_page.dart` | `OnboardingWelcomePage` | Page 1: logo, tagline, Get Started / skip |
 | `onboarding/onboarding_callsign_page.dart` | `OnboardingCallsignPage` | Page 2: CallsignField, SSID picker, passcode field |
 | `onboarding/onboarding_connect_page.dart` | `OnboardingConnectPage` | Page 3: APRS-IS / BLE / USB option cards, Start Listening |
-| `connection_sheet.dart` | `ConnectionSheet` | Two-section connection management sheet (APRS-IS status + TNC preset/port/connect); replaces stubs in all three scaffolds |
+| `connection_screen.dart` | `ConnectionScreen` | Full-screen Connection destination (v0.6); Active Connections cards, segmented control, APRS-IS/BLE/Serial tabs; BLE tab shows connected state when TNC active |
 
 ---
 

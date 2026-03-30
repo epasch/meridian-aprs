@@ -2,29 +2,32 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:provider/provider.dart';
 
+import '../../core/packet/station.dart';
+import '../../screens/connection_screen.dart';
 import '../../screens/messages_screen.dart';
 import '../../screens/packet_log_screen.dart';
 import '../../screens/station_list_screen.dart';
 import '../../services/message_service.dart';
 import '../../services/station_service.dart';
 import '../../services/tnc_service.dart';
-import '../widgets/connection_sheet.dart';
-import '../widgets/meridian_bottom_sheet.dart';
+import '../widgets/connection_nav_icon.dart';
 import '../widgets/meridian_status_pill.dart';
+import '../widgets/station_search_delegate.dart';
 import 'meridian_map.dart';
 
 /// Tablet (600–1024 px) scaffold: collapsed navigation rail + full map +
 /// collapsed bottom panel.
 ///
 /// The [NavigationRail] provides in-place tab switching via [IndexedStack]
-/// for Map, Log, Stations, and Messages. Connection opens a bottom sheet;
-/// Settings pushes a full-screen route.
+/// for Map, Log, Stations, Messages, and Connection. Settings pushes a
+/// full-screen route.
 class TabletScaffold extends StatefulWidget {
   const TabletScaffold({
     super.key,
@@ -60,21 +63,79 @@ class TabletScaffold extends StatefulWidget {
 }
 
 class _TabletScaffoldState extends State<TabletScaffold> {
-  // Indices 0-3 correspond to Map, Log, Stations, Messages.
+  // Indices 0-4 correspond to Map, Log, Stations, Messages, Connection.
   int _selectedIndex = 0;
+  bool _locating = false;
 
-  void _showConnectionSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => MeridianBottomSheet(
-        initialSize: 0.65,
-        child: ConnectionSheet(
-          stationService: widget.service,
-          tncService: widget.tncService,
+  void _navigateToConnection() {
+    setState(() => _selectedIndex = 4);
+  }
+
+  Future<void> _centerOnLocation() async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    try {
+      bool serviceEnabled;
+      try {
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      } on UnimplementedError {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location is not available on this platform.'),
+          ),
+        );
+        return;
+      }
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location services are disabled.')),
+        );
+        return;
+      }
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permission denied.')),
+        );
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
         ),
-      ),
+      );
+      if (!mounted) return;
+      widget.mapController.move(
+        LatLng(position.latitude, position.longitude),
+        13.0,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not get location: $e')));
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _searchCallsign() async {
+    // TODO(ios): replace with Cupertino search UI once iOS theme is validated
+    final station = await showSearch<Station?>(
+      context: context,
+      delegate: StationSearchDelegate(stations: widget.service.currentStations),
     );
+    if (station != null && mounted) {
+      setState(() => _selectedIndex = 0);
+      widget.mapController.move(LatLng(station.lat, station.lon), 13.0);
+    }
   }
 
   @override
@@ -86,14 +147,14 @@ class _TabletScaffoldState extends State<TabletScaffold> {
           MeridianStatusPill(
             status: widget.connectionStatus,
             label: 'APRS-IS',
-            onTap: () => _showConnectionSheet(context),
+            onTap: _navigateToConnection,
           ),
           if (!kIsWeb &&
               (Platform.isLinux || Platform.isMacOS || Platform.isWindows))
             MeridianStatusPill(
               label: 'TNC',
               status: widget.tncConnectionStatus,
-              onTap: () => _showConnectionSheet(context),
+              onTap: _navigateToConnection,
             ),
           IconButton(
             icon: Icon(
@@ -103,6 +164,22 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                 ? 'North Up (locked) — tap to unlock'
                 : 'Free rotation — tap to lock North Up',
             onPressed: widget.onToggleNorthUp,
+          ),
+          IconButton(
+            icon: const Icon(Symbols.search),
+            tooltip: 'Search callsign',
+            onPressed: _searchCallsign,
+          ),
+          IconButton(
+            icon: _locating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Symbols.my_location),
+            tooltip: 'Center on my location',
+            onPressed: _locating ? null : _centerOnLocation,
           ),
           IconButton(
             icon: const Icon(Symbols.settings),
@@ -118,12 +195,7 @@ class _TabletScaffoldState extends State<TabletScaffold> {
             extended: false,
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) {
-              if (i == 4) {
-                // Connection — transient action; open sheet without changing
-                // the persistent rail selection.
-                _showConnectionSheet(context);
-                return;
-              } else if (i == 5) {
+              if (i == 5) {
                 widget.onNavigateToSettings();
                 return;
               }
@@ -160,8 +232,8 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                 label: const Text('Messages'),
               ),
               const NavigationRailDestination(
-                icon: Icon(Symbols.router),
-                selectedIcon: Icon(Symbols.router),
+                icon: ConnectionNavIcon(),
+                selectedIcon: ConnectionNavIcon(),
                 label: Text('Connection'),
               ),
               const NavigationRailDestination(
@@ -188,6 +260,12 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                         initialCenter: widget.initialCenter,
                         initialZoom: widget.initialZoom,
                         northUpLocked: widget.northUpLocked,
+                        isAnyConnected:
+                            widget.connectionStatus ==
+                                ConnectionStatus.connected ||
+                            widget.tncConnectionStatus ==
+                                ConnectionStatus.connected,
+                        onNotConnectedTap: _navigateToConnection,
                       ),
                     ),
                     // Collapsed bottom panel — tapping switches to the Log tab.
@@ -206,6 +284,9 @@ class _TabletScaffoldState extends State<TabletScaffold> {
 
                 // Index 3 — Messages.
                 const MessagesScreen(),
+
+                // Index 4 — Connection.
+                const ConnectionScreen(),
               ],
             ),
           ),
