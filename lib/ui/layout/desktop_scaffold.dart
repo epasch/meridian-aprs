@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:provider/provider.dart';
 
+import '../../core/packet/station.dart';
 import '../../screens/connection_screen.dart';
 import '../../screens/messages_screen.dart';
 import '../../screens/packet_log_screen.dart';
@@ -15,6 +17,7 @@ import '../../services/station_service.dart';
 import '../../services/tnc_service.dart';
 import '../../theme/meridian_colors.dart';
 import '../widgets/connection_nav_icon.dart';
+import '../widgets/station_search_delegate.dart';
 import 'meridian_map.dart';
 
 /// Desktop (> 1024 px) scaffold: expanded navigation rail (240 px) + map +
@@ -67,6 +70,71 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
     setState(() => _selectedIndex = 3);
   }
 
+  Future<void> _centerOnLocation() async {
+    // Try to check if location services work at all — desktop platforms
+    // throw UnimplementedError if geolocator has no implementation.
+    bool serviceEnabled;
+    try {
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    } on UnimplementedError {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location is not available on this platform.'),
+        ),
+      );
+      return;
+    }
+    if (!serviceEnabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location services are disabled.')),
+      );
+      return;
+    }
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location permission denied.')),
+      );
+      return;
+    }
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (!mounted) return;
+      widget.mapController.move(
+        LatLng(position.latitude, position.longitude),
+        13.0,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not get location: $e')));
+    }
+  }
+
+  Future<void> _searchCallsign() async {
+    // TODO(ios): replace with Cupertino search UI once iOS theme is validated
+    final station = await showSearch<Station?>(
+      context: context,
+      delegate: StationSearchDelegate(stations: widget.service.currentStations),
+    );
+    if (station != null && mounted) {
+      setState(() => _selectedIndex = 0);
+      widget.mapController.move(LatLng(station.lat, station.lon), 13.0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -96,6 +164,16 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             onPressed: () => setState(() => _panelVisible = !_panelVisible),
           ),
           _BeaconToolbarButton(),
+          IconButton(
+            icon: const Icon(Symbols.search),
+            tooltip: 'Search callsign',
+            onPressed: _searchCallsign,
+          ),
+          IconButton(
+            icon: const Icon(Symbols.my_location),
+            tooltip: 'Center on my location',
+            onPressed: _centerOnLocation,
+          ),
           IconButton(
             icon: const Icon(Symbols.settings),
             tooltip: 'Settings',

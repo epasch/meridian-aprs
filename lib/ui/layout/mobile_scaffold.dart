@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/packet/station.dart';
 import '../../screens/connection_screen.dart';
 import '../../screens/messages_screen.dart';
 import '../../screens/packet_log_screen.dart';
@@ -17,6 +19,7 @@ import '../../services/tnc_service.dart';
 import '../widgets/beacon_fab.dart';
 import '../widgets/connection_nav_icon.dart';
 import '../widgets/meridian_status_pill.dart';
+import '../widgets/station_search_delegate.dart';
 import 'meridian_map.dart';
 
 /// Mobile (< 600 px) scaffold: full-screen map, FAB cluster, M3 Navigation Bar.
@@ -74,6 +77,71 @@ class _MobileScaffoldState extends State<MobileScaffold> {
   void _onDestinationSelected(int index) {
     HapticFeedback.selectionClick();
     setState(() => _selectedIndex = index);
+  }
+
+  Future<void> _centerOnLocation() async {
+    // Try to check if location services work at all — desktop platforms
+    // throw UnimplementedError if geolocator has no implementation.
+    bool serviceEnabled;
+    try {
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    } on UnimplementedError {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location is not available on this platform.'),
+        ),
+      );
+      return;
+    }
+    if (!serviceEnabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location services are disabled.')),
+      );
+      return;
+    }
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location permission denied.')),
+      );
+      return;
+    }
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (!mounted) return;
+      widget.mapController.move(
+        LatLng(position.latitude, position.longitude),
+        13.0,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not get location: $e')));
+    }
+  }
+
+  Future<void> _searchCallsign() async {
+    // TODO(ios): replace with Cupertino search UI once iOS theme is validated
+    final station = await showSearch<Station?>(
+      context: context,
+      delegate: StationSearchDelegate(stations: widget.service.currentStations),
+    );
+    if (station != null && mounted) {
+      setState(() => _selectedIndex = 0);
+      widget.mapController.move(LatLng(station.lat, station.lon), 13.0);
+    }
   }
 
   @override
@@ -200,14 +268,14 @@ class _MobileScaffoldState extends State<MobileScaffold> {
                             const SizedBox(width: 8),
                             FloatingActionButton.small(
                               heroTag: 'search_fab',
-                              onPressed: () {},
+                              onPressed: _searchCallsign,
                               tooltip: 'Search callsign',
                               child: const Icon(Symbols.search),
                             ),
                             const SizedBox(width: 8),
                             FloatingActionButton.small(
                               heroTag: 'center_fab',
-                              onPressed: () {},
+                              onPressed: _centerOnLocation,
                               tooltip: 'Center on my location',
                               child: const Icon(Symbols.my_location),
                             ),
