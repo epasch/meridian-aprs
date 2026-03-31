@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'beaconing_service.dart';
 import 'meridian_connection_task.dart';
@@ -97,7 +99,8 @@ enum BackgroundServiceState {
 /// [BeaconingService] on the main isolate, starts/stops the foreground service
 /// lifecycle, and calls [FlutterForegroundTask.updateService] directly to push
 /// notification content updates — no round-trip through the background isolate.
-class BackgroundServiceManager extends ChangeNotifier {
+class BackgroundServiceManager extends ChangeNotifier
+    with WidgetsBindingObserver {
   BackgroundServiceManager({
     required TncService tnc,
     required StationService station,
@@ -110,6 +113,9 @@ class BackgroundServiceManager extends ChangeNotifier {
     _tnc.addListener(_onServiceStateChanged);
     _station.addListener(_onServiceStateChanged);
     _beaconing.addListener(_onServiceStateChanged);
+    if (!kIsWeb && Platform.isAndroid) {
+      WidgetsBinding.instance.addObserver(this);
+    }
   }
 
   final TncService _tnc;
@@ -222,6 +228,60 @@ class BackgroundServiceManager extends ChangeNotifier {
     if (!Platform.isAndroid) return;
     await _taskApi.stopService();
     _setState(BackgroundServiceState.stopped);
+  }
+
+  // ---------------------------------------------------------------------------
+  // App lifecycle — background/foreground handoff
+  // ---------------------------------------------------------------------------
+
+  /// Coordinates beacon timing between the main isolate and background isolate
+  /// as the app moves between foreground and background.
+  ///
+  /// On [AppLifecycleState.paused]: suspends the main isolate beacon timer and
+  /// instructs the background isolate to take over at the correct interval.
+  ///
+  /// On [AppLifecycleState.resumed]: stops the background isolate beacon and
+  /// restores the main isolate timer from the last background beacon timestamp
+  /// stored in [SharedPreferences].
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (kIsWeb || !Platform.isAndroid || !isRunning) return;
+    switch (state) {
+      case AppLifecycleState.paused:
+        if (_beaconing.isActive && _beaconing.mode != BeaconMode.manual) {
+          // Suspend main isolate timer before the isolate is throttled.
+          // The background isolate will pick up the interval from where we
+          // left off using the last_beacon_ts timestamp.
+          _beaconing.suspendTimerForBackground();
+          FlutterForegroundTask.sendDataToTask({
+            'type': 'start_beaconing',
+            'last_beacon_ts':
+                _beaconing.lastBeaconAt?.millisecondsSinceEpoch ?? 0,
+          });
+        }
+      case AppLifecycleState.resumed:
+        // Stop background isolate beacon — main isolate takes over.
+        FlutterForegroundTask.sendDataToTask({'type': 'stop_beaconing'});
+        // Sync the main BeaconingService timer from the background isolate's
+        // last beacon timestamp (persisted to SharedPreferences).
+        _resumeBeaconingFromBackground();
+      default:
+        break;
+    }
+  }
+
+  /// Reads the last background-beacon timestamp from [SharedPreferences] and
+  /// calls [BeaconingService.resumeFromBackground] so the main isolate timer
+  /// fires at the correct time.
+  void _resumeBeaconingFromBackground() {
+    if (!_beaconing.isActive) return;
+    SharedPreferences.getInstance().then((prefs) {
+      final bgTsMs = prefs.getInt('bg_last_beacon_ts');
+      final ts = bgTsMs != null
+          ? DateTime.fromMillisecondsSinceEpoch(bgTsMs)
+          : (_beaconing.lastBeaconAt ?? DateTime.now());
+      _beaconing.resumeFromBackground(ts);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -370,6 +430,9 @@ class BackgroundServiceManager extends ChangeNotifier {
     _station.removeListener(_onServiceStateChanged);
     _beaconing.removeListener(_onServiceStateChanged);
     _updateDebounce?.cancel();
+    if (!kIsWeb && Platform.isAndroid) {
+      WidgetsBinding.instance.removeObserver(this);
+    }
     super.dispose();
   }
 }

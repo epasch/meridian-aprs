@@ -240,6 +240,37 @@ class BeaconingService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Suspends the beacon timer without deactivating beaconing.
+  ///
+  /// Called by [BackgroundServiceManager] when the Android app is backgrounded
+  /// and the background isolate is taking over beacon timing. The main isolate
+  /// timer is cancelled here so it cannot fire on resume before the background
+  /// sync is complete. [isActive] remains true.
+  void suspendTimerForBackground() {
+    _timer?.cancel();
+    _timer = null;
+    // _isActive intentionally stays true.
+  }
+
+  /// Resumes beaconing from a known last-beacon timestamp.
+  ///
+  /// Called by [BackgroundServiceManager] when the app returns to foreground.
+  /// Updates [_lastBeaconAt] to [ts] (the last background beacon time) and
+  /// restarts the timer so the next beacon fires [_autoIntervalS] seconds
+  /// after [ts].
+  void resumeFromBackground(DateTime ts) {
+    _timer?.cancel();
+    _lastBeaconAt = ts;
+    if (_isActive) {
+      final elapsed = DateTime.now().difference(ts).inSeconds;
+      final remaining = (_autoIntervalS - elapsed).clamp(0, _autoIntervalS);
+      _timerStartedAt = ts;
+      _timerIntervalS = _autoIntervalS;
+      _timer = Timer(Duration(seconds: remaining), _onTimerFired);
+    }
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _timer?.cancel();

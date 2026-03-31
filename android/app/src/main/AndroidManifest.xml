@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
         android:minSdkVersion="34" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"
         android:minSdkVersion="34" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"
         android:minSdkVersion="33" />
@@ -42,7 +42,7 @@
         <!-- Foreground service for background APRS connection keepalive (v0.7). -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
-            android:foregroundServiceType="dataSync|connectedDevice"
+            android:foregroundServiceType="dataSync|location"
             android:stopWithTask="false"
             android:exported="false" />
         <!-- Don't delete the meta-data below.
