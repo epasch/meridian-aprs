@@ -37,6 +37,7 @@ void startMeridianConnectionTask() {
 /// independent of the main isolate's APRS-IS socket.
 class MeridianConnectionTask extends TaskHandler {
   Timer? _beaconTimer;
+  int? _lastBeaconTs; // ms since epoch; null until first beacon this session
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -48,6 +49,17 @@ class MeridianConnectionTask extends TaskHandler {
   void onRepeatEvent(DateTime timestamp) {
     // 60-second heartbeat — prevents aggressive OEM firmware (MIUI, OneUI)
     // from terminating services that show no recent activity.
+    // Also refreshes the "last beacon: Xm ago" notification text so it stays
+    // current while the phone is locked (the main isolate cannot do this
+    // because its event loop is throttled when backgrounded).
+    final ts = _lastBeaconTs;
+    if (ts == null) return;
+    final diffMs = DateTime.now().millisecondsSinceEpoch - ts;
+    final minutes = diffMs ~/ 60000;
+    final ago = minutes < 1 ? 'just now' : '${minutes}m ago';
+    FlutterForegroundTask.updateService(
+      notificationText: 'Beaconing · Last beacon: $ago',
+    );
   }
 
   @override
@@ -62,6 +74,8 @@ class MeridianConnectionTask extends TaskHandler {
       case 'stop_beaconing':
         _beaconTimer?.cancel();
         _beaconTimer = null;
+        _lastBeaconTs =
+            null; // Stop onRepeatEvent updating notification after handoff
     }
   }
 
@@ -161,6 +175,7 @@ class MeridianConnectionTask extends TaskHandler {
     }
 
     final tsMs = DateTime.now().millisecondsSinceEpoch;
+    _lastBeaconTs = tsMs;
 
     // Persist timestamp to SharedPreferences so the main isolate can sync
     // the BeaconingService timer on resume, even if the IPC message is delayed.

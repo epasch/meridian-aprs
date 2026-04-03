@@ -265,6 +265,12 @@ class BackgroundServiceManager extends ChangeNotifier
         // Sync the main BeaconingService timer from the background isolate's
         // last beacon timestamp (persisted to SharedPreferences).
         _resumeBeaconingFromBackground();
+        // Reconnect APRS-IS if the TCP socket dropped while backgrounded.
+        // Android may kill sockets on screen lock; the transport detects the
+        // drop via onDone/onError but has no auto-reconnect of its own.
+        if (_station.currentConnectionStatus == ConnectionStatus.disconnected) {
+          _station.connectAprsIs(); // ignore: unawaited_futures
+        }
       default:
         break;
     }
@@ -277,9 +283,17 @@ class BackgroundServiceManager extends ChangeNotifier
     if (!_beaconing.isActive) return;
     SharedPreferences.getInstance().then((prefs) {
       final bgTsMs = prefs.getInt('bg_last_beacon_ts');
-      final ts = bgTsMs != null
-          ? DateTime.fromMillisecondsSinceEpoch(bgTsMs)
-          : (_beaconing.lastBeaconAt ?? DateTime.now());
+      final mainTs = _beaconing.lastBeaconAt;
+      final DateTime ts;
+      if (bgTsMs != null) {
+        final bgTs = DateTime.fromMillisecondsSinceEpoch(bgTsMs);
+        // bg_last_beacon_ts may be stale from a previous session if no
+        // background beacon fired during this background period (e.g. the user
+        // came back before the interval elapsed). Use whichever is more recent.
+        ts = (mainTs != null && mainTs.isAfter(bgTs)) ? mainTs : bgTs;
+      } else {
+        ts = mainTs ?? DateTime.now();
+      }
       _beaconing.resumeFromBackground(ts);
     });
   }
