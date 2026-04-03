@@ -130,6 +130,13 @@ class MeridianConnectionTask extends TaskHandler {
     final comment = prefs.getString('user_comment') ?? '';
     final locationSourceIdx = prefs.getInt('user_location_source') ?? 0;
 
+    // Beacon target flags — mirror TxService keys read directly from prefs
+    // since TxService is on the main isolate and unavailable here.
+    final beaconToAprsIs = prefs.getBool('beacon_to_aprs_is') ?? true;
+    final beaconToTnc = prefs.getBool('beacon_to_tnc') ?? true;
+
+    if (!beaconToAprsIs && !beaconToTnc) return; // Nothing to do.
+
     double? lat;
     double? lon;
 
@@ -163,16 +170,36 @@ class MeridianConnectionTask extends TaskHandler {
       comment: comment,
     );
 
-    try {
-      await _sendToAprsIs(
-        callsign: callsign,
-        ssid: ssid,
-        passcode: passcode,
-        line: line,
-      );
-    } catch (_) {
-      return; // Transmission failed — skip, retry next interval.
+    // Transmit to each enabled target independently — one failing does not
+    // suppress the other.
+    var anySent = false;
+
+    if (beaconToAprsIs) {
+      try {
+        await _sendToAprsIs(
+          callsign: callsign,
+          ssid: ssid,
+          passcode: passcode,
+          line: line,
+        );
+        anySent = true;
+      } catch (_) {
+        // APRS-IS failed — continue to TNC path if enabled.
+      }
     }
+
+    if (beaconToTnc) {
+      // The TNC connection lives on the main isolate. Request transmission via
+      // IPC; the main isolate processes this through its event loop while the
+      // foreground service wake lock keeps the CPU active.
+      FlutterForegroundTask.sendDataToMain({
+        'type': 'send_tnc_beacon',
+        'aprs_line': line,
+      });
+      anySent = true;
+    }
+
+    if (!anySent) return;
 
     final tsMs = DateTime.now().millisecondsSinceEpoch;
     _lastBeaconTs = tsMs;
@@ -185,9 +212,9 @@ class MeridianConnectionTask extends TaskHandler {
     // delivers when it resumes.
     FlutterForegroundTask.sendDataToMain({'type': 'beacon_sent', 'ts': tsMs});
 
-    // Update notification to reflect the fresh beacon.
+    // Update notification body only — title is managed by BackgroundServiceManager
+    // on the main isolate and reflects the actual connection state.
     await FlutterForegroundTask.updateService(
-      notificationTitle: 'Meridian — APRS-IS connected',
       notificationText: 'Beaconing · Last beacon: just now',
     );
   }

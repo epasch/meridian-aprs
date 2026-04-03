@@ -65,7 +65,14 @@ class FakeForegroundServiceApi implements ForegroundServiceApi {
 // Helpers
 // ---------------------------------------------------------------------------
 
-Future<({TncService tnc, StationService station, BeaconingService beaconing})>
+Future<
+  ({
+    TncService tnc,
+    StationService station,
+    BeaconingService beaconing,
+    TxService tx,
+  })
+>
 _buildDeps() async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
@@ -75,7 +82,7 @@ _buildDeps() async {
   final tx = TxService(transport, tnc);
   final settings = StationSettingsService(prefs);
   final beaconing = BeaconingService(settings, tx);
-  return (tnc: tnc, station: station, beaconing: beaconing);
+  return (tnc: tnc, station: station, beaconing: beaconing, tx: tx);
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +97,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       expect(manager.state, BackgroundServiceState.stopped);
@@ -102,6 +110,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       expect(manager.isRunning, isFalse);
@@ -114,6 +123,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       manager.setStateForTest(BackgroundServiceState.running);
@@ -127,6 +137,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       manager.setStateForTest(BackgroundServiceState.reconnecting);
@@ -140,6 +151,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       var notified = false;
@@ -160,6 +172,7 @@ void main() {
           tnc: deps.tnc,
           station: deps.station,
           beaconing: deps.beaconing,
+          tx: deps.tx,
           taskApi: fake,
         );
         // Force service into running state.
@@ -181,6 +194,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
 
@@ -205,6 +219,7 @@ void main() {
           tnc: deps.tnc,
           station: deps.station,
           beaconing: deps.beaconing,
+          tx: deps.tx,
           taskApi: FakeForegroundServiceApi(),
         );
         // Default state: both services disconnected.
@@ -221,6 +236,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       manager.setStateForTest(BackgroundServiceState.reconnecting);
@@ -234,6 +250,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       // BeaconingService is inactive by default.
@@ -249,6 +266,7 @@ void main() {
           tnc: deps.tnc,
           station: deps.station,
           beaconing: deps.beaconing,
+          tx: deps.tx,
           taskApi: FakeForegroundServiceApi(),
         );
         await deps.beaconing.setMode(BeaconMode.smart);
@@ -266,6 +284,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       await deps.beaconing.setMode(BeaconMode.auto);
@@ -283,6 +302,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: FakeForegroundServiceApi(),
       );
       await deps.beaconing.setMode(BeaconMode.auto);
@@ -309,6 +329,7 @@ void main() {
           tnc: deps.tnc,
           station: deps.station,
           beaconing: deps.beaconing,
+          tx: deps.tx,
           taskApi: fake,
         );
 
@@ -339,6 +360,7 @@ void main() {
         tnc: deps.tnc,
         station: deps.station,
         beaconing: deps.beaconing,
+        tx: deps.tx,
         taskApi: fake,
       );
 

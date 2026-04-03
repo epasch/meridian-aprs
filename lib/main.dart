@@ -94,6 +94,7 @@ Future<void> main() async {
     tnc: tncService,
     station: service,
     beaconing: beaconingService,
+    tx: txService,
   );
 
   runApp(

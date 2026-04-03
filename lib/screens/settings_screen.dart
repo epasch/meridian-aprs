@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import 'package:latlong2/latlong.dart';
 
+import '../services/background_service_manager.dart';
 import '../services/beaconing_service.dart';
 import 'location_picker_screen.dart';
 import '../services/message_service.dart';
@@ -969,6 +970,19 @@ class _BeaconingSection extends StatelessWidget {
             ],
           ),
         ),
+        if (!kIsWeb && Platform.isAndroid)
+          Consumer<BackgroundServiceManager>(
+            builder: (_, bsm, _) => SwitchListTile(
+              title: const Text('Background activity'),
+              subtitle: const Text(
+                'Keep beaconing active when the screen is locked.',
+              ),
+              value: bsm.backgroundActivityEnabled,
+              onChanged: (v) => context
+                  .read<BackgroundServiceManager>()
+                  .setBackgroundActivityEnabled(v),
+            ),
+          ),
       ],
     );
   }

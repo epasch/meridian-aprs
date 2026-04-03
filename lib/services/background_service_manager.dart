@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -11,6 +11,7 @@ import 'beaconing_service.dart';
 import 'meridian_connection_task.dart';
 import 'station_service.dart';
 import 'tnc_service.dart';
+import 'tx_service.dart';
 
 // ---------------------------------------------------------------------------
 // ForegroundServiceApi — injectable abstraction for testing
@@ -99,33 +100,69 @@ enum BackgroundServiceState {
 /// [BeaconingService] on the main isolate, starts/stops the foreground service
 /// lifecycle, and calls [FlutterForegroundTask.updateService] directly to push
 /// notification content updates — no round-trip through the background isolate.
+///
+/// **Auto-start/stop:**
+/// When [backgroundActivityEnabled] is true (the default), the service starts
+/// automatically when beaconing activates in auto or smart mode, and stops
+/// when beaconing deactivates. A service started via the manual toggle in the
+/// Connection screen is not auto-stopped.
+///
+/// **TNC beaconing via IPC:**
+/// The background isolate cannot access the live BLE/serial TNC connection.
+/// When the background timer fires and [TxService.beaconToTnc] is true, the
+/// background isolate sends a [send_tnc_beacon] IPC message to this manager,
+/// which forwards it to [TxService.sendViaTncOnly]. The foreground service
+/// wake lock keeps the CPU active so IPC delivery is prompt.
 class BackgroundServiceManager extends ChangeNotifier
     with WidgetsBindingObserver {
   BackgroundServiceManager({
     required TncService tnc,
     required StationService station,
     required BeaconingService beaconing,
+    required TxService tx,
     ForegroundServiceApi? taskApi,
   }) : _tnc = tnc,
        _station = station,
        _beaconing = beaconing,
+       _tx = tx,
        _taskApi = taskApi ?? const _DefaultForegroundServiceApi() {
     _tnc.addListener(_onServiceStateChanged);
     _station.addListener(_onServiceStateChanged);
     _beaconing.addListener(_onServiceStateChanged);
     if (!kIsWeb && Platform.isAndroid) {
       WidgetsBinding.instance.addObserver(this);
+      FlutterForegroundTask.addTaskDataCallback(_onTaskData);
+      // Load persisted backgroundActivityEnabled setting.
+      SharedPreferences.getInstance().then((prefs) {
+        _backgroundActivityEnabled = prefs.getBool(_keyBgActivity) ?? true;
+        notifyListeners();
+      });
     }
   }
 
   final TncService _tnc;
   final StationService _station;
   final BeaconingService _beaconing;
+  final TxService _tx;
   final ForegroundServiceApi _taskApi;
+
+  static const _keyBgActivity = 'bg_activity_enabled';
 
   BackgroundServiceState _state = BackgroundServiceState.stopped;
   String? _errorMessage;
   Timer? _updateDebounce;
+
+  /// True when the service was started automatically (beaconing activated)
+  /// rather than via the manual toggle. Auto-started services are also
+  /// auto-stopped when beaconing deactivates.
+  bool _autoStarted = false;
+
+  /// True when an auto-start was attempted but [Permission.locationAlways]
+  /// was not yet granted. The Connection screen surfaces a prompt to complete
+  /// the permission flow.
+  bool _needsPermission = false;
+
+  bool _backgroundActivityEnabled = true;
 
   BackgroundServiceState get state => _state;
   String? get errorMessage => _errorMessage;
@@ -133,6 +170,13 @@ class BackgroundServiceManager extends ChangeNotifier
   bool get isRunning =>
       _state == BackgroundServiceState.running ||
       _state == BackgroundServiceState.reconnecting;
+
+  /// Whether the background service auto-starts with beaconing.
+  bool get backgroundActivityEnabled => _backgroundActivityEnabled;
+
+  /// True when an auto-start is pending a [Permission.locationAlways] grant.
+  /// The Connection screen uses this to show a permission prompt.
+  bool get needsPermission => _needsPermission;
 
   // ---------------------------------------------------------------------------
   // Static initialisation — call once before runApp()
@@ -167,12 +211,31 @@ class BackgroundServiceManager extends ChangeNotifier
   }
 
   // ---------------------------------------------------------------------------
+  // Settings
+  // ---------------------------------------------------------------------------
+
+  /// Enables or disables automatic background service management.
+  ///
+  /// When disabled, stops a running auto-started service immediately.
+  /// Manually-started services are unaffected.
+  Future<void> setBackgroundActivityEnabled(bool v) async {
+    if (_backgroundActivityEnabled == v) return;
+    _backgroundActivityEnabled = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyBgActivity, v);
+    if (!v && _autoStarted && isRunning) {
+      await stopService();
+    }
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
 
   /// Requests that the Android foreground service be started.
   ///
-  /// If Auto or Smart beaconing is configured, prompts for
+  /// If auto or smart beaconing is configured, prompts for
   /// [Permission.locationAlways] (background location) before starting.
   ///
   /// Returns `true` if the service is running after this call. Returns `false`
@@ -183,6 +246,10 @@ class BackgroundServiceManager extends ChangeNotifier
   Future<bool> requestStartService(BuildContext context) async {
     if (!Platform.isAndroid) return false;
     if (isRunning) return true;
+
+    // Was this triggered by completing an auto-start permission prompt?
+    final wasAutoStartPending = _needsPermission;
+    _needsPermission = false;
 
     _setState(BackgroundServiceState.starting);
 
@@ -212,6 +279,8 @@ class BackgroundServiceManager extends ChangeNotifier
     );
 
     if (result is ServiceRequestSuccess) {
+      // Preserve auto-start semantics if we're completing a pending auto-start.
+      _autoStarted = wasAutoStartPending;
       _setState(BackgroundServiceState.running);
       return true;
     }
@@ -227,6 +296,7 @@ class BackgroundServiceManager extends ChangeNotifier
   Future<void> stopService() async {
     if (!Platform.isAndroid) return;
     await _taskApi.stopService();
+    _autoStarted = false;
     _setState(BackgroundServiceState.stopped);
   }
 
@@ -299,6 +369,71 @@ class BackgroundServiceManager extends ChangeNotifier
   }
 
   // ---------------------------------------------------------------------------
+  // IPC — messages from background isolate
+  // ---------------------------------------------------------------------------
+
+  void _onTaskData(Object data) {
+    if (data is! Map) return;
+    final msg = Map<String, dynamic>.from(data);
+    switch (msg['type'] as String?) {
+      case 'send_tnc_beacon':
+        // Background isolate timer fired; forward the packet to the live TNC
+        // connection which is maintained on this isolate.
+        final aprsLine = msg['aprs_line'] as String?;
+        if (aprsLine != null) {
+          _tx.sendViaTncOnly(aprsLine); // ignore: unawaited_futures
+        }
+      case 'beacon_sent':
+        // Background APRS-IS beacon confirmed. SharedPreferences is the
+        // authoritative sync path; this message is informational only.
+        break;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auto-start / auto-stop
+  // ---------------------------------------------------------------------------
+
+  /// Starts the service silently if [Permission.locationAlways] is already
+  /// granted. If the permission is missing, sets [needsPermission] so the
+  /// Connection screen can surface a prompt.
+  Future<void> _maybeAutoStart() async {
+    if (!Platform.isAndroid) return;
+    if (isRunning || !_backgroundActivityEnabled) return;
+    if (!_beaconing.isActive || _beaconing.mode == BeaconMode.manual) return;
+
+    // For GPS modes, background location must already be granted — we don't
+    // pop a dialog here since this fires from a ChangeNotifier callback with
+    // no BuildContext. If permission is missing, flag it for the UI.
+    if (_beaconing.mode != BeaconMode.manual) {
+      final status = await Permission.locationAlways.status;
+      if (!status.isGranted) {
+        _needsPermission = true;
+        notifyListeners();
+        return;
+      }
+    }
+
+    await Permission.notification.request();
+
+    final result = await _taskApi.startService(
+      serviceId: 1701,
+      notificationTitle: _buildTitle(),
+      notificationText: _buildBody(),
+      callback: startMeridianConnectionTask,
+    );
+
+    if (result is ServiceRequestSuccess) {
+      _autoStarted = true;
+      _needsPermission = false;
+      _setState(BackgroundServiceState.running);
+    } else {
+      _errorMessage = 'Failed to start background service.';
+      _setState(BackgroundServiceState.error);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal state tracking
   // ---------------------------------------------------------------------------
 
@@ -311,6 +446,16 @@ class BackgroundServiceManager extends ChangeNotifier
           ? BackgroundServiceState.reconnecting
           : BackgroundServiceState.running;
       if (next != _state) _setState(next);
+    }
+
+    if (!kIsWeb && Platform.isAndroid) {
+      final beaconingActive =
+          _beaconing.isActive && _beaconing.mode != BeaconMode.manual;
+      if (beaconingActive && !isRunning && _backgroundActivityEnabled) {
+        _maybeAutoStart(); // ignore: unawaited_futures
+      } else if (!beaconingActive && _autoStarted && isRunning) {
+        stopService(); // ignore: unawaited_futures
+      }
     }
 
     // Debounce: many rapid ChangeNotifier pings (BLE scanning, packet arrival)
@@ -446,6 +591,7 @@ class BackgroundServiceManager extends ChangeNotifier
     _updateDebounce?.cancel();
     if (!kIsWeb && Platform.isAndroid) {
       WidgetsBinding.instance.removeObserver(this);
+      FlutterForegroundTask.removeTaskDataCallback(_onTaskData);
     }
     super.dispose();
   }

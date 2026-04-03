@@ -32,6 +32,7 @@ void main() {
       tnc: tncService,
       station: service,
       beaconing: beaconingService,
+      tx: txService,
     );
 
     await tester.pumpWidget(

@@ -710,7 +710,16 @@ class _AprsActiveCard extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 16),
+            Consumer<TxService>(
+              builder: (_, txSvc, _) => SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Beacon'),
+                value: txSvc.beaconToAprsIs,
+                onChanged: (v) =>
+                    context.read<TxService>().setBeaconToAprsIs(v),
+              ),
+            ),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
@@ -798,7 +807,15 @@ class _TncActiveCard extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 16),
+            Consumer<TxService>(
+              builder: (_, txSvc, _) => SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Beacon'),
+                value: txSvc.beaconToTnc,
+                onChanged: (v) => context.read<TxService>().setBeaconToTnc(v),
+              ),
+            ),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
@@ -1001,7 +1018,33 @@ class _BackgroundServiceCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (!running) ...[
+            if (manager.needsPermission && !running) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Symbols.location_off,
+                    size: 16,
+                    color: MeridianColors.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Background location permission needed to beacon '
+                      'while the screen is locked.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: MeridianColors.warning,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => manager.requestStartService(context),
+                    child: const Text('Grant'),
+                  ),
+                ],
+              ),
+            ],
+            if (!running && !manager.needsPermission) ...[
               const SizedBox(height: 6),
               Text(
                 'Enable to keep connections and beaconing active '

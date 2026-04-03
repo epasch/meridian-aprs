@@ -206,7 +206,7 @@ class BeaconingService extends ChangeNotifier {
       hasMessaging: true,
     );
 
-    await _tx.sendLine(aprsLine);
+    await _tx.sendBeacon(aprsLine);
     onBeaconSent?.call(aprsLine);
     _lastBeaconAt = DateTime.now();
 
