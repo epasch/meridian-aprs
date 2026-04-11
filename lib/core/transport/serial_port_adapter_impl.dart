@@ -13,6 +13,7 @@ class DefaultSerialPortAdapter implements SerialPortAdapter {
 
   final SerialPort _port;
   SerialPortReader? _reader;
+  bool _closed = false;
 
   @override
   bool open() => _port.openReadWrite();
@@ -63,6 +64,8 @@ class DefaultSerialPortAdapter implements SerialPortAdapter {
 
   @override
   void close() {
+    if (_closed) return;
+    _closed = true;
     // Close the OS file descriptor first. On Linux this causes any thread
     // blocked in read() on this fd to return EBADF immediately, allowing the
     // native SerialPortReader thread to exit its loop before we try to free
