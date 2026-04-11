@@ -1,8 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meridian_aprs/core/connection/connection_registry.dart';
-import 'package:meridian_aprs/core/connection/meridian_connection.dart';
 
 import '../../helpers/fake_meridian_connection.dart';
 

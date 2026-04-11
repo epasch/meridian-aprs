@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meridian_aprs/core/connection/aprs_is_connection.dart';
 import 'package:meridian_aprs/core/connection/meridian_connection.dart';
 import 'package:meridian_aprs/core/transport/aprs_is_transport.dart';
-import 'package:meridian_aprs/core/transport/aprs_transport.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ---------------------------------------------------------------------------

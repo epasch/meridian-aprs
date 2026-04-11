@@ -537,8 +537,9 @@ class _ActiveConnectionCard extends StatelessWidget {
 
   static String _subtitleFor(MeridianConnection conn) {
     if (conn.type == ConnectionType.aprsIs) return 'rotate.aprs2.net:14580';
-    if (conn is SerialConnection)
+    if (conn is SerialConnection) {
       return conn.activeConfig?.port ?? 'Serial TNC';
+    }
     if (conn.type == ConnectionType.bleTnc) return 'BLE TNC';
     return conn.displayName;
   }

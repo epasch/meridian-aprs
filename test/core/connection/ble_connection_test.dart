@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
@@ -7,8 +6,6 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meridian_aprs/core/connection/ble_connection_impl.dart';
 import 'package:meridian_aprs/core/connection/meridian_connection.dart';
-import 'package:meridian_aprs/core/transport/aprs_transport.dart'
-    show ConnectionStatus;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/fake_kiss_tnc_transport.dart';

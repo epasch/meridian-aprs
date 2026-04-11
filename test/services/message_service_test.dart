@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:meridian_aprs/core/connection/connection_registry.dart';
-import 'package:meridian_aprs/core/connection/meridian_connection.dart';
 import 'package:meridian_aprs/services/message_service.dart';
 import 'package:meridian_aprs/services/station_service.dart';
 import 'package:meridian_aprs/services/station_settings_service.dart';

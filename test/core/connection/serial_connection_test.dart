@@ -1,11 +1,8 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meridian_aprs/core/connection/serial_connection_impl.dart';
 import 'package:meridian_aprs/core/connection/meridian_connection.dart';
-import 'package:meridian_aprs/core/transport/aprs_transport.dart'
-    show ConnectionStatus;
 import 'package:meridian_aprs/core/transport/tnc_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -17,7 +17,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../core/connection/connection_registry.dart';
-import '../core/connection/meridian_connection.dart';
 
 // ---------------------------------------------------------------------------
 // Backward-compat: per-message transport override enum

@@ -8,7 +8,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/connection/connection_registry.dart';
-import '../core/connection/meridian_connection.dart';
 import 'beaconing_service.dart';
 import 'meridian_connection_task.dart';
 import 'tx_service.dart';
@@ -503,8 +502,9 @@ class BackgroundServiceManager extends ChangeNotifier
     for (final id in _reconnectIds) {
       if (_reconnectTimers[id] != null) continue;
       final conn = _registry.byId(id);
-      if (conn == null || conn.status != ConnectionStatus.disconnected)
+      if (conn == null || conn.status != ConnectionStatus.disconnected) {
         continue;
+      }
 
       _reconnectTimers[id] = Timer(_kReconnectDelay, () {
         _reconnectTimers[id] = null;
