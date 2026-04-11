@@ -35,7 +35,10 @@ class DefaultSerialPortAdapter implements SerialPortAdapter {
       config.setFlowControl(SerialPortFlowControl.none);
     }
     _port.config = config;
-    config.dispose();
+    // Do NOT call config.dispose() here. The SerialPort implementation stores
+    // the reference in _config and disposes it in port.dispose(). Calling
+    // dispose() here would cause a double-free when the port is later closed,
+    // manifesting as `free(): invalid pointer` on physical disconnect.
   }
 
   @override
