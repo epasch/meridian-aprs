@@ -39,7 +39,11 @@ end
 target 'MeridianLiveActivityExtension' do
   use_frameworks!
   use_modular_headers!
-  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  # The Live Activity extension is pure SwiftUI — it does not embed Flutter
+  # or use any Flutter plugins directly. flutter_install_all_ios_pods is
+  # intentionally omitted here: including it would pull in permission_handler
+  # and other pods that call UIApplication.shared, which is forbidden in App
+  # Extension targets and causes build errors.
 end
 
 post_install do |installer|
