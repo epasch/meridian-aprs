@@ -7,6 +7,11 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Minimum background fetch interval — supplements VoIP mode keepalive so
+    // iOS delivers background fetch opportunities more frequently.
+    UIApplication.shared.setMinimumBackgroundFetchInterval(
+      UIApplication.backgroundFetchIntervalMinimum
+    )
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

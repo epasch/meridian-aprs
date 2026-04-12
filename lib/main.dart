@@ -23,6 +23,7 @@ import 'screens/map_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'services/background_service_manager.dart';
 import 'services/beaconing_service.dart';
+import 'services/ios_background_service.dart';
 import 'services/message_service.dart';
 import 'services/station_service.dart';
 import 'services/station_settings_service.dart';
@@ -161,6 +162,38 @@ Future<void> main() async {
     tx: txService,
   );
 
+  // ---------------------------------------------------------------------------
+  // iOS background service (v0.9)
+  // ---------------------------------------------------------------------------
+  // iOS keeps the process alive via UIBackgroundModes (voip, bluetooth-central,
+  // location) so no separate background isolate is needed. IosBackgroundService
+  // manages the Live Activity and background location permission signalling.
+
+  IosBackgroundService? iosBackgroundService;
+  if (!kIsWeb && Platform.isIOS) {
+    iosBackgroundService = IosBackgroundService();
+    await iosBackgroundService.initialize();
+
+    registry.addListener(() async {
+      final content = LiveActivityContent.fromRegistryAndBeaconing(
+        registry,
+        beaconingService,
+      );
+      await iosBackgroundService!.onConnectionsChanged(content);
+    });
+
+    beaconingService.addListener(() async {
+      final content = LiveActivityContent.fromRegistryAndBeaconing(
+        registry,
+        beaconingService,
+      );
+      await iosBackgroundService!.onBeaconingChanged(
+        beaconingService.mode,
+        content,
+      );
+    });
+  }
+
   runApp(
     MultiProvider(
       providers: [
@@ -176,6 +209,10 @@ Future<void> main() async {
         ChangeNotifierProvider<BackgroundServiceManager>.value(
           value: bgServiceManager,
         ),
+        if (iosBackgroundService != null)
+          ChangeNotifierProvider<IosBackgroundService>.value(
+            value: iosBackgroundService,
+          ),
       ],
       child: MeridianApp(
         onboardingComplete: onboardingComplete,

@@ -73,6 +73,9 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>location</string>
+		<string>voip</string>
+		<string>bluetooth-central</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Meridian APRS connects to the Flutter debug service on the local network during development.</string>
@@ -82,5 +85,11 @@
 	<string>Meridian APRS uses Bluetooth to connect to a KISS TNC for radio packet reception.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Meridian APRS uses Bluetooth to connect to a KISS TNC for radio packet reception.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Meridian uses your location in the background to transmit your position via APRS when beaconing is enabled.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Meridian uses your location in the background to transmit your position via APRS when beaconing is enabled.</string>
 </dict>
 </plist>
