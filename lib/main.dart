@@ -122,9 +122,12 @@ Future<void> main() async {
   // Wire ingestLine subscriptions: each connection's decoded text lines are
   // forwarded to StationService with the correct source tag.
   for (final conn in registry.all) {
-    conn.lines.listen((line) {
-      service.ingestLine(line, source: _packetSourceFor(conn.type));
-    });
+    conn.lines.listen(
+      (line) => service.ingestLine(line, source: _packetSourceFor(conn.type)),
+      onError: (Object e, StackTrace st) {
+        debugPrint('[${conn.id}] stream error: $e\n$st');
+      },
+    );
   }
 
   // Start APRS-IS connection on launch.

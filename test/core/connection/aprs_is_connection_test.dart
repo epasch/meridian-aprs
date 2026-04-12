@@ -151,18 +151,32 @@ void main() {
     await conn2.dispose();
   });
 
-  test('updateFilter sends bounding-box filter line', () async {
-    // A 1°×1° box centred on Seattle, padded 25% each edge.
-    // south=47.0, north=48.0, west=-123.0, east=-122.0
-    // padded: s=46.75, n=48.25, w=-123.25, e=-121.75
-    // minimum half-extent check: midLat=47.5, midLon=-122.5 → already >0.45
-    final bounds = LatLngBounds(
-      const LatLng(47.0, -123.0),
-      const LatLng(48.0, -122.0),
-    );
-    conn.updateFilter(bounds);
-    expect(transport.sentLines.length, 1);
-    expect(transport.sentLines.first, startsWith('#filter b/'));
-    expect(transport.sentLines.first, endsWith('\r\n'));
-  });
+  test(
+    'updateFilter sends area filter line (a/ = geographic bounding box)',
+    () async {
+      // A 1°×1° box centred on Seattle, padded 25% each edge.
+      // south=47.0, north=48.0, west=-123.0, east=-122.0
+      // padded: s=46.75, n=48.25, w=-123.25, e=-121.75
+      // minimum half-extent check: midLat=47.5, midLon=-122.5 → already >0.45
+      // a/ format: a/latN/lonW/latS/lonE → a/48.25/-123.25/46.75/-121.75
+      final bounds = LatLngBounds(
+        const LatLng(47.0, -123.0),
+        const LatLng(48.0, -122.0),
+      );
+      conn.updateFilter(bounds);
+      expect(transport.sentLines.length, 1);
+      expect(transport.sentLines.first, startsWith('#filter a/'));
+      expect(transport.sentLines.first, endsWith('\r\n'));
+      // Verify N/W/S/E order: north (48.25) appears before south (46.75).
+      final parts = transport.sentLines.first
+          .replaceFirst('#filter a/', '')
+          .replaceAll('\r\n', '')
+          .split('/');
+      expect(
+        double.parse(parts[0]),
+        greaterThan(double.parse(parts[2])),
+      ); // N > S
+      expect(double.parse(parts[1]), lessThan(double.parse(parts[3]))); // W < E
+    },
+  );
 }

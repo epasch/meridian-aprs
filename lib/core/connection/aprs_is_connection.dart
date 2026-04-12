@@ -147,9 +147,11 @@ class AprsIsConnection extends MeridianConnection {
     final effectiveW = min(paddedW, midLon - minHalf);
     final effectiveE = max(paddedE, midLon + minHalf);
 
+    // a/ is the APRS-IS area (bounding-box) filter: a/latN/lonW/latS/lonE.
+    // b/ is the budget (callsign) filter — do not use it for geographic filtering.
     final line =
-        '#filter b/${effectiveS.toStringAsFixed(2)}/${effectiveW.toStringAsFixed(2)}'
-        '/${effectiveN.toStringAsFixed(2)}/${effectiveE.toStringAsFixed(2)}\r\n';
+        '#filter a/${effectiveN.toStringAsFixed(2)}/${effectiveW.toStringAsFixed(2)}'
+        '/${effectiveS.toStringAsFixed(2)}/${effectiveE.toStringAsFixed(2)}\r\n';
     _transport.sendLine(line);
   }
 
@@ -162,7 +164,7 @@ class AprsIsConnection extends MeridianConnection {
     final n = (lat + half).clamp(-90.0, 90.0);
     final w = lon - half;
     final e = lon + half;
-    return '#filter b/${s.toStringAsFixed(2)}/${w.toStringAsFixed(2)}'
-        '/${n.toStringAsFixed(2)}/${e.toStringAsFixed(2)}\r\n';
+    return '#filter a/${n.toStringAsFixed(2)}/${w.toStringAsFixed(2)}'
+        '/${s.toStringAsFixed(2)}/${e.toStringAsFixed(2)}\r\n';
   }
 }
