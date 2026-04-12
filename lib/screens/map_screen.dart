@@ -305,8 +305,14 @@ class _MapScreenState extends State<MapScreen> {
   // Clustering
   // ---------------------------------------------------------------------------
 
-  /// Geographic clustering radius in degrees, scaled to current map zoom.
-  /// At zoom 10 the radius is ~0.28°; halves with each zoom step.
+  /// Geographic clustering radius in degrees, equivalent to ~50 screen pixels
+  /// at the current zoom level. Derived from the tile-pixel relationship:
+  /// 1° ≈ 0.711 × 2^zoom pixels, so 50 px ≈ 70.3 / 2^zoom degrees.
+  ///
+  /// Example values:
+  ///   zoom 10 → ~0.069° (~7.5 km)
+  ///   zoom 12 → ~0.017° (~1.9 km)
+  ///   zoom 14 → ~0.004° (~450 m)
   double get _clusterRadiusDegrees {
     double zoom;
     try {
@@ -314,7 +320,7 @@ class _MapScreenState extends State<MapScreen> {
     } catch (_) {
       zoom = 9.0;
     }
-    return 0.28 / math.pow(2, zoom - 10).toDouble();
+    return 70.3 / math.pow(2, zoom);
   }
 
   /// Greedy O(n²) geographic cluster grouping.
