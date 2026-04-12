@@ -24,12 +24,19 @@ class LiveActivityContent {
     required this.serviceStateLabel,
   });
 
-  Map<String, dynamic> toMap() => {
-    'connectedTransports': connectedTransportNames,
-    'lastBeaconTimestamp': lastBeaconAt?.millisecondsSinceEpoch,
-    'beaconingActive': beaconingActive,
-    'serviceStateLabel': serviceStateLabel,
-  };
+  Map<String, dynamic> toMap() {
+    final map = <String, dynamic>{
+      'connectedTransports': connectedTransportNames,
+      'beaconingActive': beaconingActive,
+      'serviceStateLabel': serviceStateLabel,
+    };
+    // NSUserDefaults rejects null — omit the key entirely when there is no
+    // beacon timestamp yet rather than inserting a null value.
+    if (lastBeaconAt != null) {
+      map['lastBeaconTimestamp'] = lastBeaconAt!.millisecondsSinceEpoch;
+    }
+    return map;
+  }
 
   factory LiveActivityContent.fromRegistryAndBeaconing(
     ConnectionRegistry registry,
