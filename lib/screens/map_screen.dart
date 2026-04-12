@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -182,6 +183,8 @@ class _MapScreenState extends State<MapScreen> {
         prefs.setDouble('map_last_lon', center.longitude);
         prefs.setDouble('map_last_zoom', zoom);
       });
+      // Recluster at new zoom level so marker density stays appropriate.
+      _onStationsUpdated(_service.currentStations);
     });
   }
 
@@ -191,7 +194,14 @@ class _MapScreenState extends State<MapScreen> {
       if (!mounted) return;
       setState(() {
         final visible = _visibleStations();
-        _markers = visible.map(_buildMarker).toList();
+        final clusters = _clusterStations(visible);
+        _markers = clusters
+            .map(
+              (g) => g.stations.length == 1
+                  ? _buildMarker(g.stations.first)
+                  : _buildClusterMarker(g),
+            )
+            .toList();
         _trackPolylines = _buildTrackPolylines(visible);
         _visibleStationCount = visible.length;
         _totalStationCount = _service.currentStations.length;
@@ -291,6 +301,90 @@ class _MapScreenState extends State<MapScreen> {
     ),
   );
 
+  // ---------------------------------------------------------------------------
+  // Clustering
+  // ---------------------------------------------------------------------------
+
+  /// Geographic clustering radius in degrees, scaled to current map zoom.
+  /// At zoom 10 the radius is ~0.28°; halves with each zoom step.
+  double get _clusterRadiusDegrees {
+    double zoom;
+    try {
+      zoom = _mapController.camera.zoom;
+    } catch (_) {
+      zoom = 9.0;
+    }
+    return 0.28 / math.pow(2, zoom - 10).toDouble();
+  }
+
+  /// Greedy O(n²) geographic cluster grouping.
+  List<_ClusterGroup> _clusterStations(List<Station> stations) {
+    final radius = _clusterRadiusDegrees;
+    final groups = <_ClusterGroup>[];
+    outer:
+    for (final s in stations) {
+      for (final g in groups) {
+        final c = g.center;
+        if ((s.lat - c.latitude).abs() + (s.lon - c.longitude).abs() < radius) {
+          g.stations.add(s);
+          continue outer;
+        }
+      }
+      groups.add(_ClusterGroup([s]));
+    }
+    return groups;
+  }
+
+  Marker _buildClusterMarker(_ClusterGroup g) => Marker(
+    point: g.center,
+    width: 48,
+    height: 48,
+    child: GestureDetector(
+      onTapDown: (d) => _showClusterPopover(d.globalPosition, g.stations),
+      child: _ClusterWidget(typeCounts: g.typeCounts, count: g.stations.length),
+    ),
+  );
+
+  void _showClusterPopover(Offset globalPos, List<Station> stations) {
+    final box = context.findRenderObject()! as RenderBox;
+    final local = box.globalToLocal(globalPos);
+    showMenu<Station>(
+      context: context,
+      position: RelativeRect.fromSize(
+        Rect.fromLTWH(local.dx, local.dy, 1, 1),
+        box.size,
+      ),
+      items: stations
+          .map(
+            (s) => PopupMenuItem<Station>(
+              value: s,
+              child: Row(
+                children: [
+                  AprsSymbolWidget(
+                    symbolTable: s.symbolTable,
+                    symbolCode: s.symbolCode,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    s.callsign,
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    ).then((selected) {
+      if (selected != null && mounted) {
+        showModalBottomSheet(
+          context: context,
+          builder: (_) => StationInfoSheet(station: selected),
+        );
+      }
+    });
+  }
+
   void _toggleNorthUp() {
     HapticFeedback.lightImpact();
     setState(() => _northUpLocked = !_northUpLocked);
@@ -333,6 +427,112 @@ class _MapScreenState extends State<MapScreen> {
       totalStationCount: _totalStationCount,
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cluster support types
+// ---------------------------------------------------------------------------
+
+/// A group of nearby stations that should be rendered as a single cluster
+/// marker.
+class _ClusterGroup {
+  _ClusterGroup(List<Station> initial) : stations = List.of(initial);
+
+  final List<Station> stations;
+
+  LatLng get center {
+    final lat =
+        stations.map((s) => s.lat).reduce((a, b) => a + b) / stations.length;
+    final lon =
+        stations.map((s) => s.lon).reduce((a, b) => a + b) / stations.length;
+    return LatLng(lat, lon);
+  }
+
+  Map<StationType, int> get typeCounts => stations.fold({}, (m, s) {
+    m[s.type] = (m[s.type] ?? 0) + 1;
+    return m;
+  });
+}
+
+/// Circular cluster bubble with a colored arc ring indicating type breakdown.
+class _ClusterWidget extends StatelessWidget {
+  const _ClusterWidget({required this.typeCounts, required this.count});
+
+  final Map<StationType, int> typeCounts;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _ClusterRingPainter(typeCounts: typeCounts, total: count),
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Theme.of(context).colorScheme.surface,
+          boxShadow: const [BoxShadow(blurRadius: 4, color: Colors.black26)],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '$count',
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+}
+
+/// Draws colored arcs proportional to station type counts as a ring around
+/// the cluster bubble.
+class _ClusterRingPainter extends CustomPainter {
+  const _ClusterRingPainter({required this.typeCounts, required this.total});
+
+  final Map<StationType, int> typeCounts;
+  final int total;
+
+  static Color _colorFor(StationType t) => switch (t) {
+    StationType.weather => Colors.blue,
+    StationType.mobile => Colors.green,
+    StationType.fixed => Colors.grey,
+    StationType.object => Colors.orange,
+    StationType.other => Colors.purple,
+  };
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const strokeWidth = 6.0;
+    const gapFraction = 0.015; // fraction of full circle per gap
+    final radius = (size.width / 2) - strokeWidth / 2;
+    final center = Offset(size.width / 2, size.height / 2);
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final entries = typeCounts.entries.where((e) => e.value > 0).toList();
+    if (entries.isEmpty) return;
+
+    // Total gap reduces arc space proportionally.
+    final totalGap = gapFraction * entries.length * 2 * math.pi;
+    final arcSpace = 2 * math.pi - totalGap;
+    final gapAngle = totalGap / entries.length;
+
+    var startAngle = -math.pi / 2; // top of circle
+    for (final entry in entries) {
+      final sweepAngle = (entry.value / total) * arcSpace;
+      final paint = Paint()
+        ..color = _colorFor(entry.key)
+        ..strokeWidth = strokeWidth
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(rect, startAngle, sweepAngle, false, paint);
+      startAngle += sweepAngle + gapAngle;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ClusterRingPainter old) =>
+      old.typeCounts != typeCounts || old.total != total;
 }
 
 /// Fallback tile provider used when no cached provider is supplied
