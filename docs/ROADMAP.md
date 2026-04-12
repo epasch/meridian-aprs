@@ -16,7 +16,7 @@ Each milestone represents a shippable increment with a focused scope. Features d
 | v0.6 — Connection UI | Connection screen overhaul, segmented APRS-IS/BLE TNC/Serial TNC tabs, map polish | ✅ Complete |
 | v0.7 — Android Background | MeridianConnectionService foreground service, persistent notification, bg packet capture + beaconing, auto-reconnect | ✅ Complete |
 | v0.8 — Platform Parity | iOS Cupertino audit, Stadia Maps tile swap (TileProvider abstraction) | ✅ Complete |
-| v0.9 — iOS Background | iOS background beaconing — background location + Live Activity | 🔜 Next |
+| v0.9 — iOS Background | iOS background beaconing — background location + Live Activity | ✅ Complete |
 | v0.10 — APRS Symbol Icon Set | New repo: `meridian-aprs-symbols` (CC BY 4.0). Style guide, SVG generation, Figma polish, sprite sheets. Integration into Meridian. | — |
 | v0.11 — Map Filters & Stations | Map filters, station profiles | — |
 | v0.12 — Map Enhancement | Track history, cluster markers, object/item display, altitude in position packets | — |
@@ -31,14 +31,17 @@ Each milestone represents a shippable increment with a focused scope. Features d
 
 ## Milestone Detail
 
-### v0.9 — iOS Background Beaconing
+### ~~v0.9 — iOS Background Beaconing~~ ✅
+
 Bring iOS to parity with Android's background beaconing capability.
 
-- Background location permission handling
-- Background packet capture while app is backgrounded
-- Position beaconing while backgrounded
-- Live Activity for persistent status on the Dynamic Island / Lock Screen
-- Auto-reconnect for APRS-IS and BLE TNC transports in background
+- ✅ Background location permission handling (`_IosBackgroundLocationPrompt` in settings, `IosBackgroundService._requestBackgroundLocationIfNeeded`)
+- ✅ Background packet capture while app is backgrounded (`voip` + `bluetooth-central` UIBackgroundModes keep process alive)
+- ✅ Position beaconing while backgrounded (`location` UIBackgroundMode + "Always" permission; `BeaconingService` continues on main isolate)
+- ✅ Live Activity for persistent status on the Dynamic Island / Lock Screen (`live_activities` package, `MeridianLiveActivity` extension)
+- ✅ Auto-reconnect for APRS-IS and BLE TNC transports in background (`ReconnectableMixin` on both connection types)
+
+⚠️ **Apple Developer Portal prerequisite:** App Group `group.com.meridianaprs.meridianAprs` must be created and enabled on both `com.meridianaprs.meridianAprs` and `com.meridianaprs.meridianAprs.MeridianLiveActivity` before Live Activities function.
 
 ---
 

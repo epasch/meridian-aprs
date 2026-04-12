@@ -461,3 +461,59 @@ A new `BackgroundServiceManager` ChangeNotifier on the main isolate manages the 
 - `TncService` and `TransportManager` are deleted; their test files are also removed. Existing serial/BLE tests are re-implemented in `test/core/connection/`.
 - `connection_screen.dart` builds tabs dynamically from `registry.available` — no platform guards needed in the UI.
 - The `TODO(tocall)` markers for APZMDN destination still apply.
+
+---
+
+## ADR-030: VoIP UIBackgroundMode for APRS-IS TCP persistence on iOS
+
+**Status:** Accepted
+**Date:** 2026-04-11
+
+**Decision:** Declare `voip` in `UIBackgroundModes` (alongside `bluetooth-central` and `location`) to keep the iOS process alive while the app is backgrounded with an active APRS-IS TCP connection.
+
+**Rationale:** iOS aggressively suspends apps without a declared background mode. `voip` is the closest semantic match to APRS-IS (a persistent bidirectional TCP stream), gives the OS permission to keep the process alive when a network connection is active, and pairs with `bluetooth-central` to keep BLE TNC connections alive. With `location` declared and "Always" permission granted, background GPS updates keep the process alive for SmartBeaconing.
+
+**Alternatives considered:**
+- `BGTaskScheduler`: Limited to 30-second processing windows, no persistent TCP socket support — unsuitable for continuous packet reception.
+- Silent push notifications: Requires a server to send push; introduces infrastructure dependency; iOS delivers these at system discretion and may coalesce or drop them.
+- Background URL sessions: HTTP/HTTPS only — APRS-IS uses raw TCP, not HTTP.
+
+**Consequences:**
+- App Store review may scrutinize the `voip` mode for an APRS client. APRS-IS is a real-time radio packet stream, which is a legitimate VoIP-analogous use case; the description should make this clear in the App Store listing.
+- `setMinimumBackgroundFetchInterval(backgroundFetchIntervalMinimum)` is set in `AppDelegate` to supplement the VoIP keepalive with background fetch opportunities.
+
+---
+
+## ADR-031: `live_activities` Flutter package over raw ActivityKit bridge
+
+**Status:** Accepted
+**Date:** 2026-04-11
+
+**Decision:** Use the `live_activities` pub.dev package (v2.4.7) to bridge Flutter to iOS ActivityKit, rather than writing a custom `FlutterMethodChannel` bridge.
+
+**Rationale:** The `live_activities` package provides a tested Dart API (`createActivity`, `updateActivity`, `endActivity`) that accepts `Map<String, dynamic>` and handles the Swift-side `LiveActivitiesAppAttributes` transport internally via an App Group file share. Writing and maintaining a custom ActivityKit bridge in Swift + a corresponding Dart method channel would require significant ongoing maintenance as ActivityKit evolves.
+
+**Alternatives considered:**
+- **Custom FlutterMethodChannel**: Full control but high maintenance cost; duplicates what the plugin already does correctly.
+- **Push-to-start Live Activities**: Requires APNs push infrastructure on a server; out of scope for a self-contained ham radio app.
+
+**Consequences:**
+- Dependency on `live_activities: ^2.4.7` (and its transitive dependency on `permission_handler ^12.0.1`, which prompted upgrading from `^11.4.0`).
+- An App Group (`group.com.meridianaprs.meridianAprs`) must be created in the Apple Developer portal and enabled on both the Runner and widget extension targets. This is a one-time developer portal step — not automatable from code.
+- The Live Activity UI (`MeridianLiveActivityLiveActivity`) is implemented in SwiftUI in the `MeridianLiveActivity` widget extension target.
+
+---
+
+## ADR-032: No separate background isolate on iOS — main isolate continues
+
+**Status:** Accepted
+**Date:** 2026-04-11
+
+**Decision:** On iOS, the main Dart isolate continues running in the background (via `voip` + `bluetooth-central` + `location` UIBackgroundModes). No separate `MeridianConnectionTask`-style background isolate is started on iOS.
+
+**Rationale:** Android kills the UI process when the app is backgrounded, which necessitates the `flutter_foreground_task` foreground service and the `MeridianConnectionTask` background isolate. iOS's model is different: with the right UIBackgroundModes declared and active connections in use, iOS suspends the app much less aggressively and the main Dart isolate continues to run. `ConnectionRegistry`, `BeaconingService`, and `TxService` — all running on the main isolate — remain active and continue packet reception and beacon firing without any isolate boundary.
+
+**Consequences:**
+- `IosBackgroundService` is a lightweight `ChangeNotifier` that manages the Live Activity and background location permission signalling; it does not start any isolate or foreground service.
+- `MeridianConnectionTask` is Android-only and remains unchanged.
+- If Apple tightens background execution policies in a future iOS release, this architecture may need to be revisited (e.g., migrating to `BGProcessingTask` for beaconing).

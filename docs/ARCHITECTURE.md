@@ -409,19 +409,78 @@ The persistent notification shows two lines:
 - **Title** — connection summary ("Meridian — TNC + APRS-IS", "Meridian — Reconnecting…", etc.)
 - **Body** — beaconing status ("Auto beacon every 5m", "SmartBeaconing™ active", "Beaconing off") with last beacon time appended when active
 
-### Platform Matrix Update
+### Platform Matrix
 
 | Feature | Linux | macOS | Windows | Android | iOS | Web |
 |---|---|---|---|---|---|---|
-| Background keepalive | ❌ | ❌ | ❌ | ✅ v0.7 | 🔜 v0.9 | ❌ |
-
-iOS background beaconing (Live Activity + background location) is deferred to v0.9.
+| Background keepalive | ❌ | ❌ | ❌ | ✅ v0.7 | ✅ v0.9 | ❌ |
 
 ### Android Manifest Requirements
 
 New permissions (v0.7): `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` (API 34+), `FOREGROUND_SERVICE_CONNECTED_DEVICE` (API 34+), `ACCESS_BACKGROUND_LOCATION`, `POST_NOTIFICATIONS` (API 33+), `RECEIVE_BOOT_COMPLETED`.
 
 Service element: `com.pravera.flutter_foreground_task.service.ForegroundService` with `foregroundServiceType="dataSync|connectedDevice"` and `stopWithTask="false"`.
+
+---
+
+## iOS Background Service (v0.9)
+
+### Overview
+
+iOS keeps the Meridian process alive via declared `UIBackgroundModes` rather than a foreground service. No separate background isolate is needed. The main Dart isolate continues to run, and `ConnectionRegistry`, `BeaconingService`, and `TxService` remain active while the app is backgrounded.
+
+**UIBackgroundModes declared (`ios/Runner/Info.plist`):**
+
+| Mode | Purpose |
+|---|---|
+| `voip` | Keeps APRS-IS TCP socket alive; iOS treats the process as hosting a real-time communication stream |
+| `bluetooth-central` | Keeps BLE TNC connection alive; app continues receiving BLE packets while backgrounded |
+| `location` | Delivers background GPS updates; required for SmartBeaconing heading/speed calculations |
+| `fetch` | Background fetch opportunities (supplemental) |
+
+**Background location permission:** "Always" (`NSLocationAlwaysAndWhenInUseUsageDescription`) is requested when the user switches to Auto or Smart beaconing mode. The `IosBackgroundService._requestBackgroundLocationIfNeeded()` checks the current permission level and signals the UI (via `needsBackgroundLocationPrompt`) to show a `CupertinoAlertDialog` directing the user to Settings.
+
+### IosBackgroundService (`lib/services/ios_background_service.dart`)
+
+Lightweight `ChangeNotifier` on the main isolate. Analogous to `BackgroundServiceManager` on Android, but simpler.
+
+Responsibilities:
+- Initializes `LiveActivities` with the App Group ID on startup
+- Listens to `ConnectionRegistry` changes via `addListener` in `main.dart`; starts or ends the Live Activity accordingly
+- Listens to `BeaconingService` changes; updates the Live Activity content and triggers background location permission check
+- Exposes `needsBackgroundLocationPrompt` flag consumed by `_IosBackgroundLocationPrompt` in settings
+
+`BackgroundServiceState` values: `stopped`, `running`, `error` (same enum shape as Android).
+
+### Live Activity (`ios/MeridianLiveActivity/`)
+
+SwiftUI widget extension (bundle ID: `com.meridianaprs.meridianAprs.MeridianLiveActivity`). Minimum deployment target: iOS 16.1 (gracefully absent on iOS 13.0–16.0 — background functionality is unaffected).
+
+**Data flow:**
+```
+Dart (IosBackgroundService)
+  └─ live_activities plugin (Map<String, dynamic> via App Group file share)
+       └─ ActivityKit (iOS)
+            ├─ Lock Screen banner (MeridianLockScreenView)
+            └─ Dynamic Island (compact leading/trailing + expanded)
+```
+
+**Live Activity content (`LiveActivityContent`):**
+- `connectedTransports: [String]` — display names of connected transports (e.g., `["APRS-IS", "BLE TNC"]`)
+- `lastBeaconTimestamp: Date?` — timestamp of last successful beacon (shown as relative "3m ago")
+- `beaconingActive: bool` — whether periodic beaconing is running
+- `serviceStateLabel: String` — "Connected" or "Disconnected"
+
+**App Group prerequisite:** `group.com.meridianaprs.meridianAprs` must be created in the Apple Developer portal and enabled on both targets. This is required for the `live_activities` plugin to share data between the Runner and the widget extension.
+
+### iOS Info.plist Requirements (v0.9)
+
+New keys added:
+- `NSSupportsLiveActivities: true` — enables Live Activity API access
+- `NSLocationAlwaysAndWhenInUseUsageDescription` — "Always" location permission rationale
+- `NSLocationAlwaysUsageDescription` — legacy key for iOS < 11 (belt-and-suspenders)
+
+The `NSLocationWhenInUseUsageDescription` and Bluetooth usage description keys already existed from v0.5/v0.4.
 
 ---
 
@@ -434,7 +493,8 @@ Service element: `com.pravera.flutter_foreground_task.service.ForegroundService`
 | `flutter_libserialport` | USB serial transport (KISS/USB) |
 | `geolocator` | GPS/location access for beaconing (added v0.5) |
 | `flutter_foreground_task` | Android foreground service keepalive (added v0.7) |
-| `permission_handler` | Android permission requests (background location, notifications) (added v0.7) |
+| `permission_handler` | Android permission requests (background location, notifications); iOS background location check (added v0.7, upgraded ^12.0.1 in v0.9) |
+| `live_activities` | iOS Live Activity bridge — Dart → ActivityKit → Lock Screen / Dynamic Island (added v0.9) |
 | `provider` | ChangeNotifier wiring throughout service layer |
 | `shared_preferences` | Theme mode, settings, beaconing config, and session state persistence |
 | `dynamic_color` | Android 12+ wallpaper-derived ColorScheme |

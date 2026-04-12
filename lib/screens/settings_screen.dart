@@ -2,9 +2,11 @@ import 'dart:io' show Platform;
 
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
@@ -12,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../services/background_service_manager.dart';
 import '../services/beaconing_service.dart';
+import '../services/ios_background_service.dart';
 import 'location_picker_screen.dart';
 import '../services/message_service.dart';
 import '../services/station_service.dart';
@@ -927,6 +930,7 @@ class _BeaconingSection extends StatelessWidget {
             ),
           ),
         ],
+        if (!kIsWeb && Platform.isIOS) const _IosBackgroundLocationPrompt(),
         if (!kIsWeb && Platform.isAndroid)
           Consumer<BackgroundServiceManager>(
             builder: (context, bsm, _) => Column(
@@ -974,6 +978,70 @@ class _BeaconingSection extends StatelessWidget {
       ],
     );
   }
+}
+
+/// iOS-only widget that watches [IosBackgroundService] and shows a
+/// [CupertinoAlertDialog] when background location permission is needed.
+/// Renders nothing visible; exists only to host the listener lifecycle.
+class _IosBackgroundLocationPrompt extends StatefulWidget {
+  const _IosBackgroundLocationPrompt();
+
+  @override
+  State<_IosBackgroundLocationPrompt> createState() =>
+      _IosBackgroundLocationPromptState();
+}
+
+class _IosBackgroundLocationPromptState
+    extends State<_IosBackgroundLocationPrompt> {
+  late final IosBackgroundService _svc;
+
+  @override
+  void initState() {
+    super.initState();
+    _svc = context.read<IosBackgroundService>();
+    _svc.addListener(_onServiceChanged);
+  }
+
+  @override
+  void dispose() {
+    _svc.removeListener(_onServiceChanged);
+    super.dispose();
+  }
+
+  void _onServiceChanged() {
+    if (!mounted || !_svc.needsBackgroundLocationPrompt) return;
+    _svc.clearBackgroundLocationPrompt();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (_) => CupertinoAlertDialog(
+          title: const Text('Background Location'),
+          content: const Text(
+            'To beacon your position while Meridian is in the background, '
+            '"Always" location access is required. You can enable this in Settings.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('Not Now'),
+              onPressed: () => Navigator.pop(context),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('Open Settings'),
+              onPressed: () {
+                Geolocator.openAppSettings();
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _IntervalTile extends StatelessWidget {

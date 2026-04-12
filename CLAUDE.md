@@ -54,15 +54,15 @@ See `docs/ARCHITECTURE.md` for full detail.
 | ~~v0.5~~ | ~~Beaconing — Transmit path, position beaconing, message sending~~ ✓ |
 | ~~v0.6~~ | ~~Connection UI + Map Polish~~ ✓ |
 | ~~v0.7~~ | ~~Android Background Beaconing (foreground service + persistent notification)~~ ✓ |
-| **v0.8** | Cross-platform parity pass (iOS Cupertino audit, Stadia Maps tile swap) |
-| **v0.9** | iOS Background Beaconing (background location + Live Activity) |
+| ~~v0.8~~ | ~~Cross-platform parity pass (iOS Cupertino audit, Stadia Maps tile swap)~~ ✓ |
+| ~~v0.9~~ | ~~iOS Background Beaconing (background location + Live Activity)~~ ✓ |
 | **v0.10** | Map filters + station profiles + track history + cluster markers + object/item display + altitude in position packets |
 | **v0.11** | Background notifications + in-app banner system |
 | **v0.12** | Security & connectivity (passcode secure storage, APRS-IS filter config) |
 | **v0.13** | Battery & performance optimization pass |
 | **v1.0** | Final polish + store submission |
 
-**Current status: v0.8 in progress. Stadia Maps tile provider in place (`MeridianTileProvider` abstraction, `StadiaTileProvider`, `AppConfig.stadiaMapsApiKey` via `--dart-define`); CartoDB tile artifacts removed; OSM attribution layer added. iOS Cupertino pass: `buildPlatformRoute` helper created; all `TODO(ios)` CupertinoPageRoute sites resolved; Cupertino widget pass applied to settings/modals. Physical iPhone 16 Pro validation pending. ADRs 001–028 in `docs/DECISIONS.md`.**
+**Current status: v0.9 complete. iOS background beaconing implemented: `voip` + `bluetooth-central` + `location` UIBackgroundModes keep the process alive when backgrounded; `IosBackgroundService` (`lib/services/ios_background_service.dart`) manages the Live Activity via the `live_activities` package; background location permission dialog fires from `_IosBackgroundLocationPrompt` in settings. Live Activity UI in `ios/MeridianLiveActivity/` shows connected transports + last beacon time on Lock Screen and Dynamic Island. ⚠️ Xcode manual step required before Live Activities work: create App Group `group.com.meridianaprs.meridianAprs` in Apple Developer portal and enable it on both targets — see docs/ARCHITECTURE.md. ADRs 001–032 in `docs/DECISIONS.md`.**
 
 **Conventions added in v0.5:**
 - `TODO(tocall)` — marks `APZMDN` destination; register with WB4APR before v1.0 release
