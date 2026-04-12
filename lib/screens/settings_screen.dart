@@ -930,8 +930,7 @@ class _BeaconingSection extends StatelessWidget {
             ),
           ),
         ],
-        if (!kIsWeb && Platform.isIOS)
-          const _IosBackgroundLocationPrompt(),
+        if (!kIsWeb && Platform.isIOS) const _IosBackgroundLocationPrompt(),
         if (!kIsWeb && Platform.isAndroid)
           Consumer<BackgroundServiceManager>(
             builder: (context, bsm, _) => Column(
