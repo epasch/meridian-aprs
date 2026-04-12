@@ -36,6 +36,8 @@ class MeridianMap extends StatelessWidget {
     this.trackPolylines = const [],
     this.activeFilterLabel,
     this.onActiveFilterTap,
+    this.visibleStationCount = 0,
+    this.totalStationCount = 0,
   });
 
   final MapController mapController;
@@ -76,6 +78,12 @@ class MeridianMap extends StatelessWidget {
 
   /// Called when the user taps the active filter chip.
   final VoidCallback? onActiveFilterTap;
+
+  /// Number of stations passing the current display filter.
+  final int visibleStationCount;
+
+  /// Total number of known stations (unfiltered).
+  final int totalStationCount;
 
   @override
   Widget build(BuildContext context) {
@@ -139,6 +147,15 @@ class MeridianMap extends StatelessWidget {
               onTap: onActiveFilterTap,
             ),
           ),
+        if (visibleStationCount < totalStationCount && totalStationCount > 0)
+          Positioned(
+            bottom: 32,
+            left: 12,
+            child: _StationCountChip(
+              visible: visibleStationCount,
+              total: totalStationCount,
+            ),
+          ),
       ],
     );
   }
@@ -186,6 +203,24 @@ class _ActiveFilterChip extends StatelessWidget {
       avatar: const Icon(Symbols.filter_list, size: 16),
       label: Text(label),
       onPressed: onTap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+/// Compact chip shown bottom-left when fewer stations are visible than known.
+/// Communicates the active filter impact: "14 of 47 stations".
+class _StationCountChip extends StatelessWidget {
+  const _StationCountChip({required this.visible, required this.total});
+
+  final int visible;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: const Icon(Icons.layers, size: 16),
+      label: Text('$visible of $total stations'),
       visualDensity: VisualDensity.compact,
     );
   }

@@ -42,6 +42,7 @@ class StationService extends ChangeNotifier {
   static const _keyPacketLog = 'packet_log_v1';
   static const _keyStationHistory = 'station_history_v1';
   static const _keyStationMaxAgeMinutes = 'station_max_age_minutes';
+  static const _keyHiddenTypes = 'station_hidden_types';
 
   /// Maximum number of position history entries kept per station.
   static const int _kMaxPositionHistory = 500;
@@ -69,6 +70,10 @@ class StationService extends ChangeNotifier {
   // This is a VIEW filter only — it does not delete station data. The station
   // map is filtered in the UI layer (map_screen.dart) before building markers.
   int? _stationMaxAgeMinutes = 60;
+
+  // Station type display filter — types in this set are hidden on the map.
+  // View filter only; no data is deleted.
+  Set<StationType> _hiddenTypes = {};
 
   // Persistence state.
   SharedPreferences? _prefs;
@@ -160,6 +165,19 @@ class StationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Station types currently hidden on the map (display filter, not deletion).
+  Set<StationType> get hiddenTypes => Set.unmodifiable(_hiddenTypes);
+
+  /// Update which station types are hidden. Persists the selection.
+  Future<void> setHiddenTypes(Set<StationType> types) async {
+    _hiddenTypes = Set.of(types);
+    await _prefs?.setStringList(
+      _keyHiddenTypes,
+      types.map((t) => t.name).toList(),
+    );
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------------------
   // Ingest
   // ---------------------------------------------------------------------------
@@ -185,6 +203,10 @@ class StationService extends ChangeNotifier {
     _stationMaxAgeMinutes = prefs.containsKey(_keyStationMaxAgeMinutes)
         ? prefs.getInt(_keyStationMaxAgeMinutes)
         : 60;
+    _hiddenTypes = (prefs.getStringList(_keyHiddenTypes) ?? [])
+        .map((n) => StationType.values.where((t) => t.name == n).firstOrNull)
+        .whereType<StationType>()
+        .toSet();
 
     // Restore station map, skipping entries older than the configured limit.
     final stationsRaw = prefs.getString(_keyStationHistory);
@@ -304,6 +326,26 @@ class StationService extends ChangeNotifier {
       final station = _mergeStation(_stationFromMicE(packet));
       _stations[station.callsign] = station;
       _stationController.add(Map.unmodifiable(_stations));
+    } else if (packet is ObjectPacket) {
+      if (!packet.isAlive) {
+        if (_stations.remove(packet.objectName) != null) {
+          _stationController.add(Map.unmodifiable(_stations));
+        }
+      } else {
+        final station = _mergeStation(_stationFromObject(packet));
+        _stations[station.callsign] = station;
+        _stationController.add(Map.unmodifiable(_stations));
+      }
+    } else if (packet is ItemPacket) {
+      if (!packet.isAlive) {
+        if (_stations.remove(packet.itemName) != null) {
+          _stationController.add(Map.unmodifiable(_stations));
+        }
+      } else {
+        final station = _mergeStation(_stationFromItem(packet));
+        _stations[station.callsign] = station;
+        _stationController.add(Map.unmodifiable(_stations));
+      }
     } else if (packet is UnknownPacket) {
       debugPrint('SKIP: ${packet.reason} -- $raw');
     }
@@ -336,6 +378,7 @@ class StationService extends ChangeNotifier {
       comment: incoming.comment.isNotEmpty ? incoming.comment : prev.comment,
       device: incoming.device ?? prev.device,
       positionHistory: history,
+      type: incoming.type,
     );
   }
 
@@ -349,6 +392,7 @@ class StationService extends ChangeNotifier {
     symbolCode: p.symbolCode,
     comment: p.comment,
     device: p.device,
+    type: classifyStationType(p.symbolTable, p.symbolCode),
   );
 
   Station _stationFromMicE(MicEPacket p) => Station(
@@ -361,6 +405,33 @@ class StationService extends ChangeNotifier {
     symbolCode: p.symbolCode,
     comment: p.comment,
     device: p.device,
+    type: classifyStationType(p.symbolTable, p.symbolCode),
+  );
+
+  Station _stationFromObject(ObjectPacket p) => Station(
+    callsign: p.objectName,
+    lat: p.lat,
+    lon: p.lon,
+    rawPacket: p.rawLine,
+    lastHeard: p.receivedAt,
+    symbolTable: p.symbolTable,
+    symbolCode: p.symbolCode,
+    comment: p.comment,
+    device: p.device,
+    type: StationType.object,
+  );
+
+  Station _stationFromItem(ItemPacket p) => Station(
+    callsign: p.itemName,
+    lat: p.lat,
+    lon: p.lon,
+    rawPacket: p.rawLine,
+    lastHeard: p.receivedAt,
+    symbolTable: p.symbolTable,
+    symbolCode: p.symbolCode,
+    comment: p.comment,
+    device: p.device,
+    type: StationType.object,
   );
 
   // ---------------------------------------------------------------------------
@@ -433,18 +504,29 @@ class StationService extends ChangeNotifier {
     'comment': s.comment,
     'lastHeard': s.lastHeard.millisecondsSinceEpoch,
     'rawPacket': s.rawPacket,
+    'type': s.type.name,
     if (s.device != null) 'device': s.device,
   };
 
-  Station _stationFromJson(Map<String, dynamic> json) => Station(
-    callsign: json['callsign'] as String,
-    lat: (json['lat'] as num).toDouble(),
-    lon: (json['lon'] as num).toDouble(),
-    symbolTable: json['symbolTable'] as String,
-    symbolCode: json['symbolCode'] as String,
-    comment: (json['comment'] as String?) ?? '',
-    lastHeard: DateTime.fromMillisecondsSinceEpoch(json['lastHeard'] as int),
-    rawPacket: (json['rawPacket'] as String?) ?? '',
-    device: json['device'] as String?,
-  );
+  Station _stationFromJson(Map<String, dynamic> json) {
+    final symbolTable = json['symbolTable'] as String;
+    final symbolCode = json['symbolCode'] as String;
+    final typeStr = json['type'] as String?;
+    final type = typeStr != null
+        ? StationType.values.where((t) => t.name == typeStr).firstOrNull ??
+              classifyStationType(symbolTable, symbolCode)
+        : classifyStationType(symbolTable, symbolCode);
+    return Station(
+      callsign: json['callsign'] as String,
+      lat: (json['lat'] as num).toDouble(),
+      lon: (json['lon'] as num).toDouble(),
+      symbolTable: symbolTable,
+      symbolCode: symbolCode,
+      comment: (json['comment'] as String?) ?? '',
+      lastHeard: DateTime.fromMillisecondsSinceEpoch(json['lastHeard'] as int),
+      rawPacket: (json['rawPacket'] as String?) ?? '',
+      device: json['device'] as String?,
+      type: type,
+    );
+  }
 }

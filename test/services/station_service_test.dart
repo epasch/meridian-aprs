@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:meridian_aprs/core/packet/aprs_packet.dart';
+import 'package:meridian_aprs/core/packet/station.dart';
 import 'package:meridian_aprs/services/station_service.dart';
 
 void main() {
@@ -86,6 +87,133 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(packets.first.transportSource, PacketSource.tnc);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // StationType classification
+  // ---------------------------------------------------------------------------
+
+  group('StationType classification', () {
+    test('position packet with car symbol is classified as mobile', () async {
+      service.ingestLine('W1AW>APZMDN,TCPIP*:!4903.50N/07201.75W>Car');
+      await Future<void>.delayed(Duration.zero);
+      expect(service.currentStations['W1AW']?.type, StationType.mobile);
+    });
+
+    test('position packet with house symbol is classified as fixed', () async {
+      // Primary table '-' is a house/home
+      service.ingestLine('W1AW>APZMDN,TCPIP*:!4903.50N/07201.75W-Fixed');
+      await Future<void>.delayed(Duration.zero);
+      expect(service.currentStations['W1AW']?.type, StationType.fixed);
+    });
+
+    test('position packet with wx symbol is classified as weather', () async {
+      // Primary table '_' is a weather station
+      service.ingestLine('W1AW>APZMDN,TCPIP*:!4903.50N/07201.75W_Weather');
+      await Future<void>.delayed(Duration.zero);
+      expect(service.currentStations['W1AW']?.type, StationType.weather);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Object / Item packets
+  // ---------------------------------------------------------------------------
+
+  group('ObjectPacket handling', () {
+    test('alive object adds a station keyed by object name', () async {
+      service.ingestLine('W1ABC>APRS:;HOSPITAL *092345z4903.50N/07201.75W/');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.currentStations, contains('HOSPITAL'));
+      expect(service.currentStations['HOSPITAL']?.type, StationType.object);
+    });
+
+    test('killed object removes the station', () async {
+      // Add the object first
+      service.ingestLine('W1ABC>APRS:;HOSPITAL *092345z4903.50N/07201.75W/');
+      await Future<void>.delayed(Duration.zero);
+      expect(service.currentStations, contains('HOSPITAL'));
+
+      // Then kill it
+      service.ingestLine('W1ABC>APRS:;HOSPITAL _092345z4903.50N/07201.75W/');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.currentStations, isNot(contains('HOSPITAL')));
+    });
+  });
+
+  group('ItemPacket handling', () {
+    test('alive item adds a station keyed by item name', () async {
+      service.ingestLine('W1ABC>APRS:)RELAY !4903.50N/07201.75W-');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.currentStations, contains('RELAY'));
+      expect(service.currentStations['RELAY']?.type, StationType.object);
+    });
+
+    test('killed item removes the station', () async {
+      service.ingestLine('W1ABC>APRS:)RELAY !4903.50N/07201.75W-');
+      await Future<void>.delayed(Duration.zero);
+      expect(service.currentStations, contains('RELAY'));
+
+      service.ingestLine('W1ABC>APRS:)RELAY _4903.50N/07201.75W-');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.currentStations, isNot(contains('RELAY')));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Hidden type filter
+  // ---------------------------------------------------------------------------
+
+  group('hiddenTypes', () {
+    test('initially empty — all types visible', () {
+      expect(service.hiddenTypes, isEmpty);
+    });
+
+    test('setHiddenTypes updates hiddenTypes', () async {
+      await service.setHiddenTypes({StationType.weather, StationType.mobile});
+      expect(
+        service.hiddenTypes,
+        containsAll([StationType.weather, StationType.mobile]),
+      );
+    });
+
+    test('setHiddenTypes persists to SharedPreferences', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final svc = StationService();
+      await svc.loadPersistedHistory(prefs);
+
+      await svc.setHiddenTypes({StationType.fixed});
+
+      final stored = prefs.getStringList('station_hidden_types');
+      expect(stored, contains('fixed'));
+      await svc.stop();
+    });
+
+    test('loadPersistedHistory restores hiddenTypes', () async {
+      SharedPreferences.setMockInitialValues({
+        'station_hidden_types': ['weather', 'mobile'],
+        'station_history_v1': '[]',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final svc = StationService();
+      await svc.loadPersistedHistory(prefs);
+
+      expect(
+        svc.hiddenTypes,
+        containsAll([StationType.weather, StationType.mobile]),
+      );
+      await svc.stop();
+    });
+
+    test('hiddenTypes getter returns unmodifiable set', () async {
+      await service.setHiddenTypes({StationType.fixed});
+      final types = service.hiddenTypes;
+      expect(() => types.add(StationType.other), throwsUnsupportedError);
     });
   });
 

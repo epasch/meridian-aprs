@@ -32,6 +32,8 @@ class ResponsiveLayout extends StatelessWidget {
     this.trackPolylines = const [],
     required this.onOpenFilterPanel,
     this.activeFilterLabel,
+    this.visibleStationCount = 0,
+    this.totalStationCount = 0,
   });
 
   final StationService service;
@@ -51,6 +53,9 @@ class ResponsiveLayout extends StatelessWidget {
   /// Non-null label shown as a chip on the map surface when a non-default
   /// time filter is active.
   final String? activeFilterLabel;
+
+  final int visibleStationCount;
+  final int totalStationCount;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +77,8 @@ class ResponsiveLayout extends StatelessWidget {
         trackPolylines: trackPolylines,
         onOpenFilterPanel: onOpenFilterPanel,
         activeFilterLabel: activeFilterLabel,
+        visibleStationCount: visibleStationCount,
+        totalStationCount: totalStationCount,
       );
     }
     if (width < 1024) {
@@ -90,6 +97,8 @@ class ResponsiveLayout extends StatelessWidget {
         trackPolylines: trackPolylines,
         onOpenFilterPanel: onOpenFilterPanel,
         activeFilterLabel: activeFilterLabel,
+        visibleStationCount: visibleStationCount,
+        totalStationCount: totalStationCount,
       );
     }
     return DesktopScaffold(
@@ -107,6 +116,8 @@ class ResponsiveLayout extends StatelessWidget {
       trackPolylines: trackPolylines,
       onOpenFilterPanel: onOpenFilterPanel,
       activeFilterLabel: activeFilterLabel,
+      visibleStationCount: visibleStationCount,
+      totalStationCount: totalStationCount,
     );
   }
 }

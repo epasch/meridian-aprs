@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-/// Contents of the map filter panel (time filter + track toggle).
+import '../../core/packet/station.dart';
+
+/// Contents of the map filter panel (time filter, type filter, track toggle).
 ///
 /// Intended to be embedded inside a [MeridianBottomSheet] or a compact
 /// [AlertDialog] (desktop). State is owned locally so the toggle and dropdown
@@ -14,6 +16,8 @@ class MapFilterPanel extends StatefulWidget {
     required this.showTracks,
     required this.onMaxAgeChanged,
     required this.onShowTracksChanged,
+    required this.currentHiddenTypes,
+    required this.onHiddenTypesChanged,
   });
 
   /// Currently active station timeout in minutes, or null for no limit.
@@ -27,6 +31,12 @@ class MapFilterPanel extends StatefulWidget {
 
   /// Called when the user toggles the track display.
   final ValueChanged<bool> onShowTracksChanged;
+
+  /// Station types currently hidden on the map.
+  final Set<StationType> currentHiddenTypes;
+
+  /// Called when the hidden-type set changes.
+  final ValueChanged<Set<StationType>> onHiddenTypesChanged;
 
   static const _timeOptions = <({String label, int? value})>[
     (label: '15 min', value: 15),
@@ -49,12 +59,14 @@ class MapFilterPanel extends StatefulWidget {
 class _MapFilterPanelState extends State<MapFilterPanel> {
   late int? _maxAgeMinutes;
   late bool _showTracks;
+  late Set<StationType> _hiddenTypes;
 
   @override
   void initState() {
     super.initState();
     _maxAgeMinutes = widget.currentMaxAgeMinutes;
     _showTracks = widget.showTracks;
+    _hiddenTypes = Set.of(widget.currentHiddenTypes);
   }
 
   @override
@@ -66,6 +78,20 @@ class _MapFilterPanelState extends State<MapFilterPanel> {
     if (oldWidget.showTracks != widget.showTracks) {
       _showTracks = widget.showTracks;
     }
+    if (oldWidget.currentHiddenTypes != widget.currentHiddenTypes) {
+      _hiddenTypes = Set.of(widget.currentHiddenTypes);
+    }
+  }
+
+  void _toggleType(StationType type) {
+    setState(() {
+      if (_hiddenTypes.contains(type)) {
+        _hiddenTypes.remove(type);
+      } else {
+        _hiddenTypes.add(type);
+      }
+    });
+    widget.onHiddenTypesChanged(Set.of(_hiddenTypes));
   }
 
   @override
@@ -107,6 +133,32 @@ class _MapFilterPanelState extends State<MapFilterPanel> {
             },
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Text(
+            'STATION TYPES',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              _typeChip(StationType.weather, Symbols.thunderstorm, 'Weather'),
+              _typeChip(StationType.mobile, Symbols.directions_car, 'Mobile'),
+              _typeChip(StationType.fixed, Symbols.home, 'Fixed'),
+              _typeChip(StationType.object, Symbols.location_on, 'Object'),
+              _typeChip(StationType.other, Symbols.more_horiz, 'Other'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
         SwitchListTile.adaptive(
           secondary: const Icon(Symbols.route),
           title: const Text('Show tracks'),
@@ -119,6 +171,16 @@ class _MapFilterPanelState extends State<MapFilterPanel> {
         ),
         const SizedBox(height: 16),
       ],
+    );
+  }
+
+  Widget _typeChip(StationType type, IconData icon, String label) {
+    final selected = !_hiddenTypes.contains(type);
+    return FilterChip(
+      avatar: Icon(icon, size: 18),
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => _toggleType(type),
     );
   }
 }

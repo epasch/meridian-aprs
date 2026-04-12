@@ -47,6 +47,8 @@ class DesktopScaffold extends StatefulWidget {
     this.trackPolylines = const [],
     required this.onOpenFilterPanel,
     this.activeFilterLabel,
+    this.visibleStationCount = 0,
+    this.totalStationCount = 0,
   });
 
   final StationService service;
@@ -63,6 +65,8 @@ class DesktopScaffold extends StatefulWidget {
   final List<Polyline> trackPolylines;
   final VoidCallback onOpenFilterPanel;
   final String? activeFilterLabel;
+  final int visibleStationCount;
+  final int totalStationCount;
 
   @override
   State<DesktopScaffold> createState() => _DesktopScaffoldState();
@@ -277,6 +281,8 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                         trackPolylines: widget.trackPolylines,
                         activeFilterLabel: widget.activeFilterLabel,
                         onActiveFilterTap: widget.onOpenFilterPanel,
+                        visibleStationCount: widget.visibleStationCount,
+                        totalStationCount: widget.totalStationCount,
                       ),
                     ),
                     AnimatedSize(

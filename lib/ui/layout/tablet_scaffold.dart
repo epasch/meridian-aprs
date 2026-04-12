@@ -44,6 +44,8 @@ class TabletScaffold extends StatefulWidget {
     this.trackPolylines = const [],
     required this.onOpenFilterPanel,
     this.activeFilterLabel,
+    this.visibleStationCount = 0,
+    this.totalStationCount = 0,
   });
 
   final StationService service;
@@ -60,6 +62,8 @@ class TabletScaffold extends StatefulWidget {
   final List<Polyline> trackPolylines;
   final VoidCallback onOpenFilterPanel;
   final String? activeFilterLabel;
+  final int visibleStationCount;
+  final int totalStationCount;
 
   @override
   State<TabletScaffold> createState() => _TabletScaffoldState();
@@ -272,6 +276,8 @@ class _TabletScaffoldState extends State<TabletScaffold> {
                         trackPolylines: widget.trackPolylines,
                         activeFilterLabel: widget.activeFilterLabel,
                         onActiveFilterTap: widget.onOpenFilterPanel,
+                        visibleStationCount: widget.visibleStationCount,
+                        totalStationCount: widget.totalStationCount,
                       ),
                     ),
                     // Collapsed bottom panel — tapping switches to the Log tab.

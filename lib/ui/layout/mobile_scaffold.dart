@@ -45,6 +45,8 @@ class MobileScaffold extends StatefulWidget {
     this.trackPolylines = const [],
     required this.onOpenFilterPanel,
     this.activeFilterLabel,
+    this.visibleStationCount = 0,
+    this.totalStationCount = 0,
   });
 
   final StationService service;
@@ -61,6 +63,8 @@ class MobileScaffold extends StatefulWidget {
   final List<Polyline> trackPolylines;
   final VoidCallback onOpenFilterPanel;
   final String? activeFilterLabel;
+  final int visibleStationCount;
+  final int totalStationCount;
 
   @override
   State<MobileScaffold> createState() => _MobileScaffoldState();
@@ -238,6 +242,8 @@ class _MobileScaffoldState extends State<MobileScaffold> {
                 trackPolylines: widget.trackPolylines,
                 activeFilterLabel: widget.activeFilterLabel,
                 onActiveFilterTap: widget.onOpenFilterPanel,
+                visibleStationCount: widget.visibleStationCount,
+                totalStationCount: widget.totalStationCount,
               ),
               // FAB cluster — bottom-right above navigation bar.
               SafeArea(

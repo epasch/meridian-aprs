@@ -75,6 +75,8 @@ class _MapScreenState extends State<MapScreen> {
   StreamSubscription<TxEvent>? _txEventSub;
   bool _northUpLocked = true;
   bool _showTracks = false;
+  int _visibleStationCount = 0;
+  int _totalStationCount = 0;
 
   @override
   void initState() {
@@ -191,11 +193,13 @@ class _MapScreenState extends State<MapScreen> {
         final visible = _visibleStations();
         _markers = visible.map(_buildMarker).toList();
         _trackPolylines = _buildTrackPolylines(visible);
+        _visibleStationCount = visible.length;
+        _totalStationCount = _service.currentStations.length;
       });
     });
   }
 
-  /// Returns the subset of stations that pass the current display-age filter,
+  /// Returns the subset of stations that pass the current display filters,
   /// sorted ascending by [Station.lastHeard] so newest render on top.
   ///
   /// This is a **view filter only** — no station data is deleted.
@@ -204,8 +208,10 @@ class _MapScreenState extends State<MapScreen> {
     final cutoff = maxAge != null
         ? DateTime.now().toUtc().subtract(Duration(minutes: maxAge))
         : null;
+    final hidden = _service.hiddenTypes;
     return _service.currentStations.values
         .where((s) => cutoff == null || !s.lastHeard.toUtc().isBefore(cutoff))
+        .where((s) => !hidden.contains(s.type))
         .toList()
       ..sort((a, b) => a.lastHeard.compareTo(b.lastHeard));
   }
@@ -258,6 +264,8 @@ class _MapScreenState extends State<MapScreen> {
           showTracks: _showTracks,
           onMaxAgeChanged: (v) => stationService.setStationMaxAgeMinutes(v),
           onShowTracksChanged: (v) => setState(() => _showTracks = v),
+          currentHiddenTypes: stationService.hiddenTypes,
+          onHiddenTypesChanged: (types) => stationService.setHiddenTypes(types),
         ),
       ),
     );
@@ -321,6 +329,8 @@ class _MapScreenState extends State<MapScreen> {
       trackPolylines: _trackPolylines,
       onOpenFilterPanel: _openFilterPanel,
       activeFilterLabel: activeFilterLabel,
+      visibleStationCount: _visibleStationCount,
+      totalStationCount: _totalStationCount,
     );
   }
 }
