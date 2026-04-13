@@ -18,10 +18,11 @@ import '../../screens/station_list_screen.dart';
 import '../../services/beaconing_service.dart';
 import '../../services/message_service.dart';
 import '../../services/station_service.dart';
+import '../../services/station_settings_service.dart';
 import '../../theme/meridian_colors.dart';
 import '../widgets/connection_nav_icon.dart';
 import '../utils/platform_route.dart';
-import '../widgets/station_search_delegate.dart';
+import '../widgets/station_info_sheet.dart';
 import 'meridian_map.dart';
 
 /// Desktop (> 1024 px) scaffold: expanded navigation rail (240 px) + map +
@@ -43,6 +44,15 @@ class DesktopScaffold extends StatefulWidget {
     this.initialZoom = 9.0,
     this.northUpLocked = true,
     required this.onToggleNorthUp,
+    this.showTracks = false,
+    this.trackPolylines = const [],
+    required this.onOpenFilterPanel,
+    this.activeFilterLabel,
+    this.visibleStationCount = 0,
+    this.totalStationCount = 0,
+    this.nearestWxStation,
+    this.isFilterActive = false,
+    this.onMapLongPress,
   });
 
   final StationService service;
@@ -55,6 +65,15 @@ class DesktopScaffold extends StatefulWidget {
   final double initialZoom;
   final bool northUpLocked;
   final VoidCallback onToggleNorthUp;
+  final bool showTracks;
+  final List<Polyline> trackPolylines;
+  final VoidCallback onOpenFilterPanel;
+  final String? activeFilterLabel;
+  final int visibleStationCount;
+  final int totalStationCount;
+  final Station? nearestWxStation;
+  final bool isFilterActive;
+  final void Function(LatLng)? onMapLongPress;
 
   @override
   State<DesktopScaffold> createState() => _DesktopScaffoldState();
@@ -120,16 +139,41 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
     }
   }
 
-  Future<void> _searchCallsign() async {
-    // TODO(ios): replace with Cupertino search UI once iOS theme is validated
-    final station = await showSearch<Station?>(
-      context: context,
-      delegate: StationSearchDelegate(stations: widget.service.currentStations),
-    );
-    if (station != null && mounted) {
-      setState(() => _selectedIndex = 0);
-      widget.mapController.move(LatLng(station.lat, station.lon), 13.0);
+  void _showStationOnMap(Station station) {
+    setState(() => _selectedIndex = 0);
+    widget.mapController.move(LatLng(station.lat, station.lon), 13.0);
+  }
+
+  void _showOwnStation() {
+    final settings = context.read<StationSettingsService>();
+    final service = context.read<StationService>();
+
+    if (settings.callsign.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Set your callsign in Settings first.')),
+      );
+      return;
     }
+
+    final ownAddress = settings.fullAddress;
+    final station = service.currentStations[ownAddress];
+
+    if (station == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$ownAddress hasn\'t been heard yet.')),
+      );
+      return;
+    }
+
+    setState(() => _selectedIndex = 0);
+    widget.mapController.move(LatLng(station.lat, station.lon), 13.0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (_) => StationInfoSheet(station: station),
+      );
+    });
   }
 
   @override
@@ -161,10 +205,19 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
             onPressed: () => setState(() => _panelVisible = !_panelVisible),
           ),
           _BeaconToolbarButton(),
+          Badge(
+            isLabelVisible: widget.isFilterActive,
+            smallSize: 8,
+            child: IconButton(
+              icon: const Icon(Symbols.filter_list),
+              tooltip: 'Map filters',
+              onPressed: widget.onOpenFilterPanel,
+            ),
+          ),
           IconButton(
-            icon: const Icon(Symbols.search),
-            tooltip: 'Search callsign',
-            onPressed: _searchCallsign,
+            icon: const Icon(Symbols.person_pin),
+            tooltip: 'Find my station',
+            onPressed: _showOwnStation,
           ),
           IconButton(
             icon: _locating
@@ -260,6 +313,14 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                             .read<ConnectionRegistry>()
                             .isAnyConnected,
                         onNotConnectedTap: _navigateToConnection,
+                        showTracks: widget.showTracks,
+                        trackPolylines: widget.trackPolylines,
+                        activeFilterLabel: widget.activeFilterLabel,
+                        onActiveFilterTap: widget.onOpenFilterPanel,
+                        visibleStationCount: widget.visibleStationCount,
+                        totalStationCount: widget.totalStationCount,
+                        nearestWxStation: widget.nearestWxStation,
+                        onMapLongPress: widget.onMapLongPress,
                       ),
                     ),
                     AnimatedSize(
@@ -279,7 +340,10 @@ class _DesktopScaffoldState extends State<DesktopScaffold> {
                 ),
 
                 // Index 1 — Station list.
-                StationListScreen(service: widget.service),
+                StationListScreen(
+                  service: widget.service,
+                  onShowOnMap: _showStationOnMap,
+                ),
 
                 // Index 2 — Messages.
                 const MessagesScreen(),

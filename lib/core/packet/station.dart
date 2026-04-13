@@ -1,3 +1,54 @@
+import 'package:latlong2/latlong.dart';
+
+/// A single timestamped position snapshot for a station's movement track.
+class TimestampedPosition {
+  final DateTime timestamp;
+  final LatLng position;
+  const TimestampedPosition(this.timestamp, this.position);
+}
+
+/// Broad category used for the map type filter and cluster ring colouring.
+///
+/// Classification is based on APRS symbol codes ([classifyStationType]) for
+/// position/Mic-E packets, and set to [object] for APRS object/item packets
+/// regardless of their symbol.
+enum StationType { weather, mobile, fixed, object, other }
+
+/// Derive a [StationType] from the station's APRS symbol table and code.
+///
+/// Objects and items must be classified by the caller as [StationType.object]
+/// since their symbol alone does not distinguish them from fixed stations.
+StationType classifyStationType(String symbolTable, String symbolCode) {
+  // Weather stations — primary `_` or alternate-table `W`.
+  if (symbolCode == '_') return StationType.weather;
+  if (symbolTable == r'\' && symbolCode == 'W') return StationType.weather;
+
+  // Mobile — vehicles, aircraft, watercraft (primary table only).
+  const mobilePrimary = {
+    '>', // car
+    'j', // Jeep
+    'k', // truck
+    'u', // bus
+    'v', // ATV / 4WD
+    '^', // aircraft
+    "'", // small aircraft
+    'X', // helicopter
+    's', // ship / power boat
+    'Y', // yacht / sail boat
+    'b', // bicycle
+    'S', // motor boat
+    'a', // ambulance
+    'f', // fire truck
+    'g', // balloon
+    'O', // hot air balloon
+  };
+  if (symbolTable == '/' && mobilePrimary.contains(symbolCode)) {
+    return StationType.mobile;
+  }
+
+  return StationType.fixed;
+}
+
 class Station {
   final String callsign;
   final double lat;
@@ -12,6 +63,15 @@ class Station {
   /// or null if not resolved.
   final String? device;
 
+  /// Ordered position history for this station (oldest first), capped at 500
+  /// entries. The current position ([lat]/[lon]) is NOT included in this list —
+  /// it is the position of the most-recent packet, while this list holds prior
+  /// positions to render a movement track.
+  final List<TimestampedPosition> positionHistory;
+
+  /// Station category used for the map type filter and cluster ring.
+  final StationType type;
+
   const Station({
     required this.callsign,
     required this.lat,
@@ -22,7 +82,37 @@ class Station {
     required this.symbolCode,
     required this.comment,
     this.device,
+    this.positionHistory = const [],
+    this.type = StationType.fixed,
   });
+
+  Station copyWith({
+    String? callsign,
+    double? lat,
+    double? lon,
+    String? rawPacket,
+    DateTime? lastHeard,
+    String? symbolTable,
+    String? symbolCode,
+    String? comment,
+    String? device,
+    List<TimestampedPosition>? positionHistory,
+    StationType? type,
+  }) {
+    return Station(
+      callsign: callsign ?? this.callsign,
+      lat: lat ?? this.lat,
+      lon: lon ?? this.lon,
+      rawPacket: rawPacket ?? this.rawPacket,
+      lastHeard: lastHeard ?? this.lastHeard,
+      symbolTable: symbolTable ?? this.symbolTable,
+      symbolCode: symbolCode ?? this.symbolCode,
+      comment: comment ?? this.comment,
+      device: device ?? this.device,
+      positionHistory: positionHistory ?? this.positionHistory,
+      type: type ?? this.type,
+    );
+  }
 
   /// Backward-compat alias for [lastHeard].
   DateTime get timestamp => lastHeard;

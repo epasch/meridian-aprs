@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/packet/station.dart';
 import '../../map/meridian_tile_provider.dart';
 
 import '../../services/station_service.dart';
@@ -28,6 +29,15 @@ class ResponsiveLayout extends StatelessWidget {
     this.initialZoom = 9.0,
     this.northUpLocked = true,
     required this.onToggleNorthUp,
+    this.showTracks = false,
+    this.trackPolylines = const [],
+    required this.onOpenFilterPanel,
+    this.activeFilterLabel,
+    this.visibleStationCount = 0,
+    this.totalStationCount = 0,
+    this.nearestWxStation,
+    this.isFilterActive = false,
+    this.onMapLongPress,
   });
 
   final StationService service;
@@ -40,6 +50,27 @@ class ResponsiveLayout extends StatelessWidget {
   final double initialZoom;
   final bool northUpLocked;
   final VoidCallback onToggleNorthUp;
+  final bool showTracks;
+  final List<Polyline> trackPolylines;
+  final VoidCallback onOpenFilterPanel;
+
+  /// Non-null label shown as a chip on the map surface when a non-default
+  /// time filter is active.
+  final String? activeFilterLabel;
+
+  final int visibleStationCount;
+  final int totalStationCount;
+
+  /// Nearest weather station within 50 km of the map center.
+  /// Non-null only when the overlay is enabled and a WX station is in range.
+  final Station? nearestWxStation;
+
+  /// Whether any map filter is set to a non-default value. Used to badge the
+  /// filter FAB/button so users know active filters are in effect.
+  final bool isFilterActive;
+
+  /// Called when the user long-presses on the map canvas.
+  final void Function(LatLng)? onMapLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +88,15 @@ class ResponsiveLayout extends StatelessWidget {
         initialZoom: initialZoom,
         northUpLocked: northUpLocked,
         onToggleNorthUp: onToggleNorthUp,
+        showTracks: showTracks,
+        trackPolylines: trackPolylines,
+        onOpenFilterPanel: onOpenFilterPanel,
+        activeFilterLabel: activeFilterLabel,
+        visibleStationCount: visibleStationCount,
+        totalStationCount: totalStationCount,
+        nearestWxStation: nearestWxStation,
+        isFilterActive: isFilterActive,
+        onMapLongPress: onMapLongPress,
       );
     }
     if (width < 1024) {
@@ -71,6 +111,15 @@ class ResponsiveLayout extends StatelessWidget {
         initialZoom: initialZoom,
         northUpLocked: northUpLocked,
         onToggleNorthUp: onToggleNorthUp,
+        showTracks: showTracks,
+        trackPolylines: trackPolylines,
+        onOpenFilterPanel: onOpenFilterPanel,
+        activeFilterLabel: activeFilterLabel,
+        visibleStationCount: visibleStationCount,
+        totalStationCount: totalStationCount,
+        nearestWxStation: nearestWxStation,
+        isFilterActive: isFilterActive,
+        onMapLongPress: onMapLongPress,
       );
     }
     return DesktopScaffold(
@@ -84,6 +133,15 @@ class ResponsiveLayout extends StatelessWidget {
       initialZoom: initialZoom,
       northUpLocked: northUpLocked,
       onToggleNorthUp: onToggleNorthUp,
+      showTracks: showTracks,
+      trackPolylines: trackPolylines,
+      onOpenFilterPanel: onOpenFilterPanel,
+      activeFilterLabel: activeFilterLabel,
+      visibleStationCount: visibleStationCount,
+      totalStationCount: totalStationCount,
+      nearestWxStation: nearestWxStation,
+      isFilterActive: isFilterActive,
+      onMapLongPress: onMapLongPress,
     );
   }
 }
