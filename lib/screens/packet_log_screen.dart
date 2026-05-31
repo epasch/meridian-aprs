@@ -442,7 +442,8 @@ class _PacketRow extends StatelessWidget {
   static String _telSummary(TelemetryPacket p) {
     final vals = p.analog.map((v) => v == null ? '—' : _trimNum(v)).join(', ');
     final seq = p.sequence.isEmpty ? '' : '#${p.sequence} ';
-    return vals.isEmpty ? '${seq}telemetry'.trim() : '$seq• $vals';
+    if (seq.isEmpty) return vals.isEmpty ? 'telemetry' : vals;
+    return vals.isEmpty ? '${seq}telemetry' : '$seq• $vals';
   }
 }
 

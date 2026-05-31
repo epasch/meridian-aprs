@@ -418,6 +418,18 @@ void main() {
       );
       expect(p.rainfall1h, equals(0.0));
     });
+
+    // Regression: a positionless report that omits the 8-char timestamp must
+    // not have its leading wx fields stripped as if a timestamp were present.
+    test('parses standalone weather without a timestamp', () {
+      final p = expectPacketType<WeatherPacket>(
+        'WX4XYZ>APRS:_c220s004g008t060h68',
+      );
+      expect(p.windDirection, equals(220));
+      expect(p.windSpeed, equals(4.0));
+      expect(p.temperature, equals(60.0));
+      expect(p.humidity, equals(68));
+    });
   });
 
   // ---------------------------------------------------------------------------

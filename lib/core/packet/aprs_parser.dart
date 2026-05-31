@@ -1278,6 +1278,10 @@ class AprsParser {
   // `ddd/sss` = wind direction (degrees) / wind speed (mph).
   static final _windRe = RegExp(r'^(\d{3})/(\d{3})');
 
+  // Detects the 8-digit MDHM timestamp that follows the `_` DTI in a
+  // positionless weather report (when present).
+  static final _eightDigitsRe = RegExp(r'^\d{8}$');
+
   AprsPacket _parseWeather({
     required String info,
     required String rawLine,
@@ -1287,9 +1291,12 @@ class AprsParser {
     required DateTime receivedAt,
     required PacketSource transportSource,
   }) {
-    // Skip DTI and 8-char timestamp (MMDDhhmm).
-    // Some implementations omit the timestamp; handle both.
-    final weatherData = info.length > 9 ? info.substring(9) : info.substring(1);
+    // Skip the DTI and, when present, the 8-char timestamp (MMDDhhmm). Some
+    // implementations omit it, so only strip a leading run that actually looks
+    // like an 8-digit timestamp — otherwise the first wx chars get dropped.
+    final hasTimestamp =
+        info.length > 9 && _eightDigitsRe.hasMatch(info.substring(1, 9));
+    final weatherData = hasTimestamp ? info.substring(9) : info.substring(1);
     final f = _scanWeatherFields(weatherData);
 
     return WeatherPacket(
