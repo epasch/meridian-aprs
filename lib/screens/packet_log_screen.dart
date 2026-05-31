@@ -16,7 +16,8 @@ enum _PacketFilter {
   obj('OBJ'),
   item('ITEM'),
   status('STATUS'),
-  micE('MIC-E');
+  micE('MIC-E'),
+  tel('TEL');
 
   const _PacketFilter(this.label);
   final String label;
@@ -192,6 +193,7 @@ class _PacketListState extends State<_PacketList> {
       _PacketFilter.item => p is ItemPacket,
       _PacketFilter.status => p is StatusPacket,
       _PacketFilter.micE => p is MicEPacket,
+      _PacketFilter.tel => p is TelemetryPacket,
     };
   }
 
@@ -236,7 +238,7 @@ class _FilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Eager inflation is intentional: the chip set is a fixed, small enum
-    // (8 items). Rebuild scope is the concern here, not lazy inflation — and
+    // (9 items). Rebuild scope is the concern here, not lazy inflation — and
     // that is handled by isolating this bar from the packet list (#58).
     return SizedBox(
       height: 48,
@@ -384,6 +386,9 @@ class _PacketRow extends StatelessWidget {
       ItemPacket() => 'ITEM',
       StatusPacket() => 'STATUS',
       MicEPacket() => 'MIC-E',
+      TelemetryPacket() => 'TEL',
+      QueryPacket() => 'QUERY',
+      CapabilitiesPacket() => 'CAP',
       UnknownPacket() => '???',
     };
   }
@@ -399,6 +404,9 @@ class _PacketRow extends StatelessWidget {
       StatusPacket() => p.status,
       MicEPacket() =>
         '${_latStr(p.lat)}, ${_lonStr(p.lon)} \u2022 ${p.micEMessage}',
+      TelemetryPacket() => _telSummary(p),
+      QueryPacket() => '? ${p.query}',
+      CapabilitiesPacket() => p.capabilities,
       UnknownPacket() =>
         p.rawLine.length > 40
             ? '${p.rawLine.substring(0, 40)}\u2026'
@@ -430,7 +438,19 @@ class _PacketRow extends StatelessWidget {
     }
     return parts.isEmpty ? 'Weather' : parts.join(' / ');
   }
+
+  static String _telSummary(TelemetryPacket p) {
+    final vals = p.analog.map((v) => v == null ? '—' : _trimNum(v)).join(', ');
+    final seq = p.sequence.isEmpty ? '' : '#${p.sequence} ';
+    if (seq.isEmpty) return vals.isEmpty ? 'telemetry' : vals;
+    return vals.isEmpty ? '${seq}telemetry' : '$seq• $vals';
+  }
 }
+
+/// Formats a telemetry value as an integer when it has no fractional part,
+/// otherwise with its natural decimal representation.
+String _trimNum(double v) =>
+    v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
 // ---------------------------------------------------------------------------
 // Type badge — color-coded per packet type, theme-aware
@@ -475,6 +495,9 @@ class _TypeBadge extends StatelessWidget {
     'ITEM' => Colors.amber,
     'STATUS' => Colors.green,
     'MIC-E' => Colors.indigo,
+    'TEL' => Colors.teal,
+    'QUERY' => Colors.pink,
+    'CAP' => Colors.brown,
     _ => Colors.blueGrey,
   };
 }

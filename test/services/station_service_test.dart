@@ -6,6 +6,7 @@ import 'package:meridian_aprs/core/packet/aprs_packet.dart';
 import 'package:meridian_aprs/core/packet/station.dart';
 import 'package:meridian_aprs/database/meridian_database.dart';
 import 'package:meridian_aprs/services/station_service.dart';
+import 'package:meridian_aprs/ui/utils/wx_data.dart';
 
 import '../helpers/fake_meridian_connection.dart';
 import '../helpers/test_database.dart';
@@ -120,6 +121,26 @@ void main() {
       );
       expect(service.currentStations['W1AW']?.type, StationType.weather);
     });
+
+    // Regression: the weather-overlay chip and station sheet both re-parse the
+    // station comment via WxData.parse, so a weather station's comment must
+    // carry parseable wx tokens (not a human summary or the raw frame).
+    test(
+      'weather station comment is WxData-parseable for the overlay',
+      () async {
+        await service.ingestLine(
+          'W1AW>APMDN0,TCPIP*:!4903.50N/07201.75W_220/004g005t077h50',
+        );
+        final s = service.currentStations['W1AW'];
+        expect(s, isNotNull);
+        final wx = WxData.parse(s!.comment);
+        expect(wx, isNotNull);
+        expect(wx!.tempF, equals(77));
+        expect(wx.windDir, equals(220));
+        expect(wx.windSpeed, equals(4));
+        expect(wx.humidity, equals(50));
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------

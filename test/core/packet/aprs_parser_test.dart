@@ -418,6 +418,18 @@ void main() {
       );
       expect(p.rainfall1h, equals(0.0));
     });
+
+    // Regression: a positionless report that omits the 8-char timestamp must
+    // not have its leading wx fields stripped as if a timestamp were present.
+    test('parses standalone weather without a timestamp', () {
+      final p = expectPacketType<WeatherPacket>(
+        'WX4XYZ>APRS:_c220s004g008t060h68',
+      );
+      expect(p.windDirection, equals(220));
+      expect(p.windSpeed, equals(4.0));
+      expect(p.temperature, equals(60.0));
+      expect(p.humidity, equals(68));
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -685,13 +697,15 @@ void main() {
       );
     });
 
-    test('telemetry packet (T) returns UnknownPacket', () {
+    test('telemetry packet (T) decodes to TelemetryPacket', () {
+      // Previously stubbed to UnknownPacket; telemetry data reports are now
+      // decoded (see the dedicated TelemetryPacket group below).
       expect(
         parser.parse(
           'N0CALL>APRS:T#001,100,200,050,000,255,00000001',
           receivedAt: kTestReceivedAt,
         ),
-        isA<UnknownPacket>(),
+        isA<TelemetryPacket>(),
       );
     });
 
@@ -921,6 +935,36 @@ void main() {
         }
       },
     );
+
+    // Real Kenwood TH-D75 signature: leading `>` prefix, trailing `&` suffix
+    // (per aprs-deviceid; D7A=`>`, D72=`>=`, D74=`>^`, D75=`>&`). Modelled on a
+    // real TH-D75 capture: without this, the `&` device byte leaked into the
+    // comment and the radio was misidentified as a TH-D7A.
+    test(
+      'TH-D75 (`>` prefix + `&` suffix): suffix stripped, device detected',
+      () {
+        final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/>\x224\x22}hello&';
+        final packet = parser.parse(rawLine, receivedAt: kTestReceivedAt);
+        expect(packet, isA<MicEPacket>());
+        if (packet is MicEPacket) {
+          expect(packet.comment, equals('hello'));
+          expect(packet.device, equals('Kenwood TH-D75'));
+          expect(packet.altitude, closeTo(11.0, 1.0));
+        }
+      },
+    );
+
+    // An empty TH-D75 comment is just the bare `&` device byte — it must strip
+    // to an empty comment, not surface a lone '&'.
+    test('TH-D75 with no user comment strips the bare `&` to empty', () {
+      final rawLine = 'N0CALL-9>SX5E0A,WIDE1-1:\x60i<N Ol>/>&';
+      final packet = parser.parse(rawLine, receivedAt: kTestReceivedAt);
+      expect(packet, isA<MicEPacket>());
+      if (packet is MicEPacket) {
+        expect(packet.comment, isEmpty);
+        expect(packet.device, equals('Kenwood TH-D75'));
+      }
+    });
 
     // Real-world capture from KM4TJO-9 (user-owned TM-D710): the radio sent
     // an empty user comment, so the extension is just the prefix + altitude
@@ -1714,6 +1758,202 @@ void main() {
           equals('Object uncompressed position regex did not match'),
         );
       });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Third-party traffic (DTI: })
+  // -------------------------------------------------------------------------
+  group('third-party traffic (DTI })', () {
+    test('unwraps an inner message and attributes the relaying gateway', () {
+      // Modelled on a real LoRa-igate relay: gateway re-injecting a heard
+      // message addressed to a third station. Callsigns anonymised.
+      final p = expectPacketType<MessagePacket>(
+        'N0CALL-1>APRS,N0DIGI-5,WIDE2:}N0AAA-7>APRS,TCPIP,N0CALL-1*'
+        '::N0BBB-1  :N:HOTG Happy #APRSThursday from LoRa Tracker 73!',
+      );
+      // Attributed to the inner source, not the gateway.
+      expect(p.source, equals('N0AAA-7'));
+      expect(p.destination, equals('APRS'));
+      expect(p.addressee, equals('N0BBB-1'));
+      // The relaying gateway is recorded.
+      expect(p.thirdPartyVia, equals('N0CALL-1'));
+      // rawLine stays the full outer frame for display / DB re-parse.
+      expect(p.rawLine, startsWith('N0CALL-1>APRS'));
+    });
+
+    test('unwraps an inner warning-service message', () {
+      // Modelled on a relayed weather-warning message. Callsigns anonymised.
+      final p = expectPacketType<MessagePacket>(
+        'N0CALL-1>APRS,N0DIGI-5,WIDE2:}N0WX>APRS,TCPIP,N0CALL-1*'
+        '::WXALERT  :280215z,SVR_STORM,VAC025,VAC053,VAC111,VAC135{Z10AA',
+      );
+      expect(p.source, equals('N0WX'));
+      expect(p.addressee, equals('WXALERT'));
+      expect(p.thirdPartyVia, equals('N0CALL-1'));
+    });
+
+    test('unwraps an inner object packet', () {
+      // Modelled on a relayed severe-storm warning object (DTI ;).
+      // Callsigns / object name anonymised.
+      final p = expectPacketType<ObjectPacket>(
+        'N0CALL-1>APRS,N0DIGI-5,WIDE2:}N0WX>APRS,TCPIP,N0CALL-1*'
+        ':;N0WXOBJ01*280130z3708.40N\\07815.00WT111/037SVR_STORM '
+        '}d0]MPPNNHKJMP{Y10AA',
+      );
+      expect(p.source, equals('N0WX'));
+      expect(p.objectName, equals('N0WXOBJ01'));
+      expect(p.thirdPartyVia, equals('N0CALL-1'));
+      expect(p.lat, closeTo(37.14, 0.01));
+      expect(p.lon, closeTo(-78.25, 0.01));
+    });
+
+    test('inner packet that is itself unknown still records the relay', () {
+      final packet = parser.parse(
+        'GATE>APRS:}BADCALL>APRS:%bogus',
+        receivedAt: kTestReceivedAt,
+      );
+      expect(packet, isA<UnknownPacket>());
+      expect(packet.source, equals('BADCALL'));
+      expect(packet.thirdPartyVia, equals('GATE'));
+    });
+
+    test('empty third-party payload is reported, never throws', () {
+      final p = expectPacketType<UnknownPacket>('GATE>APRS:}');
+      expect(p.reason, equals('Empty third-party payload'));
+    });
+
+    test('deeply nested third-party is capped (terminates)', () {
+      // Three '}' levels exceed the cap (the guard fires when a '}' is
+      // dispatched at the max depth); the parser must not recurse unboundedly
+      // and must still return a packet.
+      final p = expectPacketType<UnknownPacket>(
+        'A>APRS:}B>APRS:}C>APRS:}D>APRS:!1234.56N/12345.67W>',
+      );
+      expect(p.reason, equals('Third-party nesting too deep'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Telemetry data reports (DTI: T)
+  // -------------------------------------------------------------------------
+  group('TelemetryPacket (DTI T)', () {
+    test('decodes a standard T# data report', () {
+      // Modelled on a real T# telemetry beacon; callsigns anonymised.
+      final p = expectPacketType<TelemetryPacket>(
+        'N0CALL>APRS,N0DIGI-5,WIDE1,WIDE2-2:T#014,123,162,255,093,065,00000011',
+      );
+      expect(p.sequence, equals('014'));
+      expect(p.analog, equals(<double>[123, 162, 255, 93, 65]));
+      expect(
+        p.digital,
+        equals(<bool>[false, false, false, false, false, false, true, true]),
+      );
+      expect(p.comment, isNull);
+    });
+
+    test('accepts a non-numeric MIC sequence id', () {
+      final p = expectPacketType<TelemetryPacket>(
+        'N0CALL>APRS:T#MIC,001,002,003,004,005,10101010',
+      );
+      expect(p.sequence, equals('MIC'));
+      expect(p.analog.length, equals(5));
+      expect(p.digital.first, isTrue);
+    });
+
+    test('preserves a trailing comment after the digital field', () {
+      final p = expectPacketType<TelemetryPacket>(
+        'N0CALL>APRS:T#007,10,20,30,40,50,00000000Solar',
+      );
+      expect(p.comment, equals('Solar'));
+    });
+
+    test('tolerates blank analog fields without failing the packet', () {
+      final p = expectPacketType<TelemetryPacket>(
+        'N0CALL>APRS:T#008,,20,,40,,00000000',
+      );
+      expect(p.analog[0], isNull);
+      expect(p.analog[1], equals(20));
+      expect(p.analog[2], isNull);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Weather embedded in a position report (`_` symbol code)
+  // -------------------------------------------------------------------------
+  group('positioned weather (`_` symbol)', () {
+    test('timestamped position with `_` symbol decodes to WeatherPacket', () {
+      final p = expectPacketType<WeatherPacket>(
+        'N0CALL>APRS:@092345z4903.50N/07201.75W_220/004g005t077r000p000'
+        'P000h50b09900wRSW',
+      );
+      expect(p.lat, closeTo(49.0583, 0.001));
+      expect(p.lon, closeTo(-72.0292, 0.001));
+      expect(p.symbolCode, equals('_'));
+      expect(p.windDirection, equals(220));
+      expect(p.windSpeed, equals(4)); // mph, from the ddd/sss slot
+      expect(p.windGust, equals(5));
+      expect(p.temperature, equals(77));
+      expect(p.humidity, equals(50));
+      expect(p.pressure, closeTo(990.0, 0.1));
+      expect(p.timestamp, isNotNull);
+    });
+
+    test('non-timestamped position with `_` symbol also decodes weather', () {
+      final p = expectPacketType<WeatherPacket>(
+        'N0CALL>APRS:!4903.50N/07201.75W_180/010t068',
+      );
+      expect(p.windDirection, equals(180));
+      expect(p.windSpeed, equals(10));
+      expect(p.temperature, equals(68));
+    });
+
+    test('humidity h00 decodes as 100% (APRS §12)', () {
+      final p = expectPacketType<WeatherPacket>(
+        'N0CALL>APRS:!4903.50N/07201.75W_000/000t070h00',
+      );
+      expect(p.humidity, equals(100));
+    });
+
+    // Critical regression: a *moving* station sends an identical-looking
+    // `ddd/sss` course/speed but a non-`_` symbol — it must stay a Position.
+    test('moving station with course/speed is NOT mis-binned as weather', () {
+      final p = expectPacketType<PositionPacket>(
+        'N0CALL>APRS:!4903.50N/07201.75W>088/036Mobile',
+      );
+      expect(p.course, equals(88));
+      expect(p.speed, equals(36)); // knots — course/speed, not wind
+      expect(p.symbolCode, equals('>'));
+      expect(p.comment, equals('Mobile'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Query (DTI ?) and station capabilities (DTI <)
+  // -------------------------------------------------------------------------
+  group('query and capabilities', () {
+    test('general query `?APRS?` decodes to QueryPacket', () {
+      final p = expectPacketType<QueryPacket>('N0CALL>APRS:?APRS?');
+      expect(p.query, equals('APRS'));
+    });
+
+    test('query without trailing `?` decodes', () {
+      final p = expectPacketType<QueryPacket>('N0CALL>APRS:?WX');
+      expect(p.query, equals('WX'));
+    });
+
+    test('station capabilities `<` decodes to CapabilitiesPacket', () {
+      final p = expectPacketType<CapabilitiesPacket>(
+        'N0CALL>APRS:<IGATE,MSG_CNT=2,LOC_CNT=18',
+      );
+      expect(p.capabilities, equals('IGATE,MSG_CNT=2,LOC_CNT=18'));
+    });
+
+    // A directed query carried inside a message keeps DTI ':' and must stay a
+    // MessagePacket — the `?` parser must not intercept it.
+    test('directed query inside a message stays a MessagePacket', () {
+      final p = expectPacketType<MessagePacket>('N0CALL>APRS::N0CALL   :?WX?');
+      expect(p.message, equals('?WX?'));
     });
   });
 }

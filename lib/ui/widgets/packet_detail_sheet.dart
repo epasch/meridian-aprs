@@ -158,6 +158,9 @@ class PacketDetailSheet extends StatelessWidget {
     } else if (p.path.isNotEmpty) {
       m['Path'] = p.path.join(', ');
     }
+    if (p.thirdPartyVia != null) {
+      m['Relayed via'] = p.thirdPartyVia!;
+    }
     m['Received'] = p.receivedAt
         .toUtc()
         .toString()
@@ -215,6 +218,7 @@ class PacketDetailSheet extends StatelessWidget {
         if (p.rainfall24h != null) {
           m['Rainfall 24h'] = '${(p.rainfall24h! / 100).toStringAsFixed(2)} in';
         }
+        if (p.timestamp != null) m['Packet time'] = p.timestamp.toString();
 
       case ObjectPacket():
         m['Type'] = 'Object';
@@ -258,6 +262,28 @@ class PacketDetailSheet extends StatelessWidget {
         if (p.device != null) m['Device'] = p.device!;
         if (p.comment.isNotEmpty) m['Comment'] = p.comment;
 
+      case TelemetryPacket():
+        m['Type'] = 'Telemetry';
+        if (p.sequence.isNotEmpty) m['Sequence'] = p.sequence;
+        for (var i = 0; i < p.analog.length; i++) {
+          final v = p.analog[i];
+          m['Analog ${i + 1}'] = v == null ? '—' : _trimNum(v);
+        }
+        if (p.digital.isNotEmpty) {
+          m['Digital bits'] = p.digital.map((b) => b ? '1' : '0').join();
+        }
+        if (p.comment != null && p.comment!.isNotEmpty) {
+          m['Comment'] = p.comment!;
+        }
+
+      case QueryPacket():
+        m['Type'] = 'Query';
+        if (p.query.isNotEmpty) m['Query'] = p.query;
+
+      case CapabilitiesPacket():
+        m['Type'] = 'Capabilities';
+        if (p.capabilities.isNotEmpty) m['Capabilities'] = p.capabilities;
+
       case UnknownPacket():
         m['Type'] = 'Unknown';
         m['Reason'] = p.reason;
@@ -291,6 +317,10 @@ String _formatLon(double lon) {
   final dir = lon >= 0 ? 'E' : 'W';
   return '${lon.abs().toStringAsFixed(6)}\u00b0 $dir';
 }
+
+/// Formats a telemetry value as an integer when it has no fractional part.
+String _trimNum(double v) =>
+    v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label, required this.colorScheme});

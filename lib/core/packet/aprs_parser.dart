@@ -18,6 +18,20 @@ class _CsT {
   final String comment;
 }
 
+/// Mutable scratch holder for the scalar fields scanned out of a weather-data
+/// string. Used by both standalone (`_`) and positioned weather parsing.
+class _WxFields {
+  int? windDir;
+  double? windSpeed;
+  double? windGust;
+  double? temperature;
+  int? humidity;
+  double? pressure;
+  double? rainfall1h;
+  double? rainfall24h;
+  double? rainSinceMidnight;
+}
+
 /// Full APRS packet parser.
 ///
 /// [parse] accepts an APRS-IS text line and returns a typed [AprsPacket].
@@ -42,10 +56,39 @@ class AprsParser {
     required DateTime receivedAt,
     PacketSource transportSource = PacketSource.aprsIs,
   }) {
+    return _parseInternal(
+      line: line,
+      rawLine: line,
+      receivedAt: receivedAt,
+      transportSource: transportSource,
+      depth: 0,
+    );
+  }
+
+  /// Maximum third-party (`}`) unwrapping depth. One level covers all real
+  /// traffic (an igate re-injecting a heard packet); the small cap is a guard
+  /// against pathological/looped nesting so [parse] keeps its never-throws,
+  /// always-terminates contract.
+  static const int _kMaxThirdPartyDepth = 2;
+
+  /// Core parse used by [parse] and by third-party unwrapping.
+  ///
+  /// [line] is the packet text actually being decoded — for a third-party
+  /// payload this is the *inner* packet. [rawLine] is the original outer line
+  /// stamped onto every produced packet so the Raw Packet display and the
+  /// re-parse-from-DB path both see the complete frame. [depth] tracks
+  /// third-party nesting.
+  AprsPacket _parseInternal({
+    required String line,
+    required String rawLine,
+    required DateTime receivedAt,
+    required PacketSource transportSource,
+    required int depth,
+  }) {
     // Ignore blank lines and server comment lines.
     if (line.isEmpty || line.startsWith('#')) {
       return _unknown(
-        line,
+        rawLine,
         '',
         '',
         [],
@@ -59,7 +102,7 @@ class AprsParser {
     final colonIdx = line.indexOf(':');
     if (colonIdx < 0 || colonIdx + 1 > line.length) {
       return _unknown(
-        line,
+        rawLine,
         '',
         '',
         [],
@@ -76,7 +119,7 @@ class AprsParser {
     final gtIdx = header.indexOf('>');
     if (gtIdx <= 0) {
       return _unknown(
-        line,
+        rawLine,
         '',
         '',
         [],
@@ -93,7 +136,7 @@ class AprsParser {
 
     if (info.isEmpty) {
       return _unknown(
-        line,
+        rawLine,
         source,
         destination,
         path,
@@ -109,17 +152,18 @@ class AprsParser {
       return _dispatch(
         dti: dti,
         info: info,
-        rawLine: line,
+        rawLine: rawLine,
         source: source,
         destination: destination,
         path: path,
         receivedAt: receivedAt,
         transportSource: transportSource,
+        depth: depth,
       );
     } catch (_) {
       // Belt-and-suspenders: never propagate exceptions.
       return UnknownPacket(
-        rawLine: line,
+        rawLine: rawLine,
         source: source,
         destination: destination,
         path: path,
@@ -180,6 +224,7 @@ class AprsParser {
     required List<String> path,
     required DateTime receivedAt,
     required PacketSource transportSource,
+    required int depth,
   }) {
     switch (dti) {
       // Position without timestamp — no messaging (!) or messaging (=)
@@ -267,6 +312,31 @@ class AprsParser {
           transportSource: transportSource,
         );
 
+      // General query (e.g. ?APRS?). Directed queries arrive inside a message
+      // (DTI ':') and are handled there.
+      case '?':
+        return _parseQuery(
+          info: info,
+          rawLine: rawLine,
+          source: source,
+          destination: destination,
+          path: path,
+          receivedAt: receivedAt,
+          transportSource: transportSource,
+        );
+
+      // Station capabilities (e.g. <IGATE,MSG_CNT=2,LOC_CNT=18).
+      case '<':
+        return _parseCapabilities(
+          info: info,
+          rawLine: rawLine,
+          source: source,
+          destination: destination,
+          path: path,
+          receivedAt: receivedAt,
+          transportSource: transportSource,
+        );
+
       // Mic-E
       case '`':
       case "'":
@@ -280,17 +350,30 @@ class AprsParser {
           transportSource: transportSource,
         );
 
-      // Telemetry — parsed as Unknown for now (v0.2 scope)
+      // Telemetry data report.
       case 'T':
-        return UnknownPacket(
+        return _parseTelemetry(
+          info: info,
           rawLine: rawLine,
           source: source,
           destination: destination,
           path: path,
           receivedAt: receivedAt,
           transportSource: transportSource,
-          reason: 'Telemetry not yet implemented',
-          rawInfo: info,
+        );
+
+      // Third-party traffic: an igate/gateway re-injecting a packet it heard.
+      // The info field after the `}` indicator is a complete inner packet.
+      case '}':
+        return _parseThirdParty(
+          info: info,
+          rawLine: rawLine,
+          source: source,
+          destination: destination,
+          path: path,
+          receivedAt: receivedAt,
+          transportSource: transportSource,
+          depth: depth,
         );
 
       default:
@@ -305,6 +388,136 @@ class AprsParser {
           transportSource: transportSource,
         );
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Third-party traffic  (DTI: })
+  // ---------------------------------------------------------------------------
+
+  /// Decode third-party traffic by unwrapping the embedded inner packet.
+  ///
+  /// Format: `}` immediately followed by a complete APRS packet
+  /// (`SOURCE>DEST,PATH:INFO`). The inner packet is re-parsed and returned as
+  /// its own typed packet — attributed to the *inner* source — with
+  /// [AprsPacket.thirdPartyVia] stamped to the relaying gateway (the outer
+  /// [source]). [rawLine] stays the full outer line so the re-parse-from-DB
+  /// path stays deterministic and the Raw Packet display shows the whole frame.
+  AprsPacket _parseThirdParty({
+    required String info,
+    required String rawLine,
+    required String source,
+    required String destination,
+    required List<String> path,
+    required DateTime receivedAt,
+    required PacketSource transportSource,
+    required int depth,
+  }) {
+    if (depth >= _kMaxThirdPartyDepth) {
+      return _unknown(
+        rawLine,
+        source,
+        destination,
+        path,
+        'Third-party nesting too deep',
+        rawInfo: info,
+        receivedAt: receivedAt,
+        transportSource: transportSource,
+      );
+    }
+
+    final inner = info.substring(1); // strip the leading '}'
+    if (inner.isEmpty) {
+      return _unknown(
+        rawLine,
+        source,
+        destination,
+        path,
+        'Empty third-party payload',
+        rawInfo: info,
+        receivedAt: receivedAt,
+        transportSource: transportSource,
+      );
+    }
+
+    final innerPacket = _parseInternal(
+      line: inner,
+      rawLine: rawLine,
+      receivedAt: receivedAt,
+      transportSource: transportSource,
+      depth: depth + 1,
+    );
+    // Attribute the relay to the gateway that re-injected this packet.
+    innerPacket.thirdPartyVia = source;
+    return innerPacket;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Telemetry parsing  (DTI: T)
+  // ---------------------------------------------------------------------------
+
+  // Splits a digital-bits token into the leading run of 0/1 bits and any
+  // trailing comment text (some senders append free text after the bit field).
+  static final _telemetryBitsRe = RegExp(r'^([01]+)(.*)$', dotAll: true);
+
+  /// Decode a telemetry data report: `T#sss,a1,a2,a3,a4,a5,bbbbbbbb[comment]`.
+  ///
+  /// The leading `#` is conventional but some encoders omit it; the sequence
+  /// id may be numeric ("014") or the literal "MIC". Up to five analog
+  /// channels precede an eight-bit digital field. Missing or unparseable
+  /// fields decode to null/false rather than failing the whole packet — `T` is
+  /// telemetry-only per APRS spec, so we always return a [TelemetryPacket].
+  AprsPacket _parseTelemetry({
+    required String info,
+    required String rawLine,
+    required String source,
+    required String destination,
+    required List<String> path,
+    required DateTime receivedAt,
+    required PacketSource transportSource,
+  }) {
+    var payload = info.substring(1); // drop the 'T' DTI
+    if (payload.startsWith('#')) payload = payload.substring(1);
+
+    final tokens = payload.split(',');
+    final sequence = tokens.isNotEmpty ? tokens.first.trim() : '';
+
+    final analog = <double?>[];
+    for (var i = 1; i <= 5 && i < tokens.length; i++) {
+      analog.add(double.tryParse(tokens[i].trim()));
+    }
+
+    var digital = const <bool>[];
+    String? comment;
+    if (tokens.length > 6) {
+      final bitsToken = tokens[6];
+      final m = _telemetryBitsRe.firstMatch(bitsToken);
+      if (m != null) {
+        digital = [for (final c in m.group(1)!.split('')) c == '1'];
+        final rest = m.group(2)!;
+        if (rest.isNotEmpty) comment = rest;
+      } else if (bitsToken.isNotEmpty) {
+        comment = bitsToken;
+      }
+    }
+    // Any tokens past the digital field belong to the comment verbatim
+    // (a comment may itself contain commas).
+    if (tokens.length > 7) {
+      final tail = tokens.sublist(7).join(',');
+      comment = (comment == null || comment.isEmpty) ? tail : '$comment,$tail';
+    }
+
+    return TelemetryPacket(
+      rawLine: rawLine,
+      source: source,
+      destination: destination,
+      path: path,
+      receivedAt: receivedAt,
+      transportSource: transportSource,
+      sequence: sequence,
+      analog: analog,
+      digital: digital,
+      comment: comment,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -475,6 +688,30 @@ class AprsParser {
     final symbolTable = m.group(3)!;
     final symbolCode = m.group(6)!;
     var comment = m.group(7)!;
+
+    // Weather station: a `_` symbol code means this position carries a weather
+    // report — the `ddd/sss` in the course/speed slot is wind direction/speed
+    // and the remainder holds the wx fields. Bin as a WeatherPacket WITH the
+    // position. The symbol is the only reliable discriminator: a moving station
+    // with course/speed has an identical `ddd/sss` but a non-`_` symbol and
+    // must stay a PositionPacket. (Compressed `_` weather and object/item/Mic-E
+    // weather are not yet promoted — tracked as a follow-up.)
+    if (symbolCode == '_') {
+      return _buildPositionedWeather(
+        comment: comment,
+        rawLine: rawLine,
+        source: source,
+        destination: destination,
+        path: path,
+        receivedAt: receivedAt,
+        transportSource: transportSource,
+        lat: lat,
+        lon: lon,
+        symbolTable: symbolTable,
+        symbolCode: symbolCode,
+        timestamp: packetTimestamp,
+      );
+    }
 
     // Extract course/speed from beginning of comment.
     int? course;
@@ -1037,6 +1274,14 @@ class AprsParser {
     r'c(\d{3})|s(\d{3})|g(\d{3})|t(-?\d{3})|r(\d{3})|p(\d{3})|P(\d{3})|h(\d{2})|b(\d{5})',
   );
 
+  // Wind in a positioned weather report uses the course/speed slot:
+  // `ddd/sss` = wind direction (degrees) / wind speed (mph).
+  static final _windRe = RegExp(r'^(\d{3})/(\d{3})');
+
+  // Detects the 8-digit MDHM timestamp that follows the `_` DTI in a
+  // positionless weather report (when present).
+  static final _eightDigitsRe = RegExp(r'^\d{8}$');
+
   AprsPacket _parseWeather({
     required String info,
     required String rawLine,
@@ -1046,43 +1291,13 @@ class AprsParser {
     required DateTime receivedAt,
     required PacketSource transportSource,
   }) {
-    // Skip DTI and 8-char timestamp (MMDDhhmm).
-    // Some implementations omit the timestamp; handle both.
-    final weatherData = info.length > 9 ? info.substring(9) : info.substring(1);
-
-    int? windDir;
-    double? windSpeed;
-    double? windGust;
-    double? temperature;
-    int? humidity;
-    double? pressure;
-    double? rainfall1h;
-    double? rainfall24h;
-    double? rainSinceMidnight;
-
-    for (final m in _weatherFieldRe.allMatches(weatherData)) {
-      if (m.group(1) != null) {
-        windDir = int.tryParse(m.group(1)!);
-      } else if (m.group(2) != null) {
-        windSpeed = double.tryParse(m.group(2)!);
-      } else if (m.group(3) != null) {
-        windGust = double.tryParse(m.group(3)!);
-      } else if (m.group(4) != null) {
-        temperature = double.tryParse(m.group(4)!);
-      } else if (m.group(5) != null) {
-        rainfall1h = double.tryParse(m.group(5)!);
-      } else if (m.group(6) != null) {
-        rainfall24h = double.tryParse(m.group(6)!);
-      } else if (m.group(7) != null) {
-        // 'P' field: rainfall since midnight, in hundredths of an inch.
-        rainSinceMidnight = double.tryParse(m.group(7)!);
-      } else if (m.group(8) != null) {
-        humidity = int.tryParse(m.group(8)!);
-      } else if (m.group(9) != null) {
-        final raw = int.tryParse(m.group(9)!);
-        if (raw != null) pressure = raw / 10.0; // tenths of mb → mb
-      }
-    }
+    // Skip the DTI and, when present, the 8-char timestamp (MMDDhhmm). Some
+    // implementations omit it, so only strip a leading run that actually looks
+    // like an 8-digit timestamp — otherwise the first wx chars get dropped.
+    final hasTimestamp =
+        info.length > 9 && _eightDigitsRe.hasMatch(info.substring(1, 9));
+    final weatherData = hasTimestamp ? info.substring(9) : info.substring(1);
+    final f = _scanWeatherFields(weatherData);
 
     return WeatherPacket(
       rawLine: rawLine,
@@ -1091,15 +1306,146 @@ class AprsParser {
       path: path,
       receivedAt: receivedAt,
       transportSource: transportSource,
-      temperature: temperature,
-      humidity: humidity,
-      pressure: pressure,
-      windSpeed: windSpeed,
-      windDirection: windDir,
-      windGust: windGust,
-      rainfall1h: rainfall1h,
-      rainfall24h: rainfall24h,
-      rainSinceMidnight: rainSinceMidnight,
+      temperature: f.temperature,
+      humidity: f.humidity,
+      pressure: f.pressure,
+      windSpeed: f.windSpeed,
+      windDirection: f.windDir,
+      windGust: f.windGust,
+      rainfall1h: f.rainfall1h,
+      rainfall24h: f.rainfall24h,
+      rainSinceMidnight: f.rainSinceMidnight,
+    );
+  }
+
+  /// Build a [WeatherPacket] from a positioned weather report (a `_`-symbol
+  /// position). [comment] is the text after the symbol code: an optional
+  /// leading `ddd/sss` wind direction/speed, then the wx fields.
+  AprsPacket _buildPositionedWeather({
+    required String comment,
+    required String rawLine,
+    required String source,
+    required String destination,
+    required List<String> path,
+    required DateTime receivedAt,
+    required PacketSource transportSource,
+    required double lat,
+    required double lon,
+    required String symbolTable,
+    required String symbolCode,
+    required DateTime? timestamp,
+  }) {
+    int? windDir;
+    double? windSpeed;
+    var data = comment;
+    final wm = _windRe.firstMatch(comment);
+    if (wm != null) {
+      windDir = int.tryParse(wm.group(1)!);
+      windSpeed = double.tryParse(wm.group(2)!); // mph (APRS weather wind)
+      data = comment.substring(wm.end);
+    }
+    final f = _scanWeatherFields(data);
+
+    return WeatherPacket(
+      rawLine: rawLine,
+      source: source,
+      destination: destination,
+      path: path,
+      receivedAt: receivedAt,
+      transportSource: transportSource,
+      lat: lat,
+      lon: lon,
+      symbolTable: symbolTable,
+      symbolCode: symbolCode,
+      temperature: f.temperature,
+      humidity: f.humidity,
+      pressure: f.pressure,
+      windSpeed: windSpeed ?? f.windSpeed,
+      windDirection: windDir ?? f.windDir,
+      windGust: f.windGust,
+      rainfall1h: f.rainfall1h,
+      rainfall24h: f.rainfall24h,
+      rainSinceMidnight: f.rainSinceMidnight,
+      timestamp: timestamp,
+    );
+  }
+
+  /// Scan a weather-data string for the standard letter-prefixed wx fields
+  /// (`c/s/g/t/r/p/P/h/b`). Shared by standalone (`_`) and positioned weather.
+  _WxFields _scanWeatherFields(String data) {
+    final f = _WxFields();
+    for (final m in _weatherFieldRe.allMatches(data)) {
+      if (m.group(1) != null) {
+        f.windDir = int.tryParse(m.group(1)!);
+      } else if (m.group(2) != null) {
+        f.windSpeed = double.tryParse(m.group(2)!);
+      } else if (m.group(3) != null) {
+        f.windGust = double.tryParse(m.group(3)!);
+      } else if (m.group(4) != null) {
+        f.temperature = double.tryParse(m.group(4)!);
+      } else if (m.group(5) != null) {
+        f.rainfall1h = double.tryParse(m.group(5)!);
+      } else if (m.group(6) != null) {
+        f.rainfall24h = double.tryParse(m.group(6)!);
+      } else if (m.group(7) != null) {
+        // 'P' field: rainfall since midnight, in hundredths of an inch.
+        f.rainSinceMidnight = double.tryParse(m.group(7)!);
+      } else if (m.group(8) != null) {
+        // APRS 1.0.1 §12: humidity is hNN with h00 meaning 100%.
+        final h = int.tryParse(m.group(8)!);
+        if (h != null) f.humidity = h == 0 ? 100 : h;
+      } else if (m.group(9) != null) {
+        final raw = int.tryParse(m.group(9)!);
+        if (raw != null) f.pressure = raw / 10.0; // tenths of mb → mb
+      }
+    }
+    return f;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Query  (DTI: ?)  and  Station capabilities  (DTI: <)
+  // ---------------------------------------------------------------------------
+
+  AprsPacket _parseQuery({
+    required String info,
+    required String rawLine,
+    required String source,
+    required String destination,
+    required List<String> path,
+    required DateTime receivedAt,
+    required PacketSource transportSource,
+  }) {
+    // Strip the leading '?' and any trailing '?' (e.g. '?APRS?' → 'APRS').
+    var q = info.substring(1);
+    if (q.endsWith('?')) q = q.substring(0, q.length - 1);
+    return QueryPacket(
+      rawLine: rawLine,
+      source: source,
+      destination: destination,
+      path: path,
+      receivedAt: receivedAt,
+      transportSource: transportSource,
+      query: q,
+    );
+  }
+
+  AprsPacket _parseCapabilities({
+    required String info,
+    required String rawLine,
+    required String source,
+    required String destination,
+    required List<String> path,
+    required DateTime receivedAt,
+    required PacketSource transportSource,
+  }) {
+    return CapabilitiesPacket(
+      rawLine: rawLine,
+      source: source,
+      destination: destination,
+      path: path,
+      receivedAt: receivedAt,
+      transportSource: transportSource,
+      capabilities: info.substring(1), // drop the '<' DTI
     );
   }
 
@@ -1429,10 +1775,11 @@ class AprsParser {
     // Strip device-indicator trailing byte from the comment.
     if (micEPrefix != null) {
       // Legacy Kenwood: at most a single trailing byte (`=` for D710/D72A,
-      // `^` for D74, `v` reserved). If it's not one of those, it's user text
-      // and must be left intact.
+      // `^` for D74, `&` for TH-D75, `v` reserved). If it's not one of those,
+      // it's user text and must be left intact.
       if (comment.endsWith('=') ||
           comment.endsWith('^') ||
+          comment.endsWith('&') ||
           comment.endsWith('v')) {
         comment = comment.substring(0, comment.length - 1);
       }
