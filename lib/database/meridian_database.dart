@@ -10,6 +10,7 @@ import 'daos/bulletin_dao.dart';
 import 'daos/message_dao.dart';
 import 'daos/packet_dao.dart';
 import 'daos/station_dao.dart';
+import 'daos/telemetry_definition_dao.dart';
 import 'tables/bulletins.dart';
 import 'tables/conversations.dart';
 import 'tables/group_message_entries.dart';
@@ -18,6 +19,7 @@ import 'tables/outgoing_bulletins.dart';
 import 'tables/packets.dart';
 import 'tables/position_history.dart';
 import 'tables/stations.dart';
+import 'tables/telemetry_definitions.dart';
 
 part 'meridian_database.g.dart';
 
@@ -31,16 +33,26 @@ part 'meridian_database.g.dart';
     GroupMessageEntries,
     Bulletins,
     OutgoingBulletins,
+    TelemetryDefinitions,
   ],
-  daos: [StationDao, PacketDao, MessageDao, BulletinDao],
+  daos: [
+    StationDao,
+    PacketDao,
+    MessageDao,
+    BulletinDao,
+    TelemetryDefinitionDao,
+  ],
 )
 class MeridianDatabase extends _$MeridianDatabase {
   MeridianDatabase(super.executor);
 
   MeridianDatabase.connect(DatabaseConnection super.connection) : super();
 
+  // v1 → v2 (Unit 2, ADR-070): added the telemetry_definitions table. This is
+  // the app's first schema migration — it must be strictly additive and
+  // non-destructive (existing installs carry real packet/message/station data).
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -68,6 +80,12 @@ class MeridianDatabase extends _$MeridianDatabase {
       await customStatement(
         'CREATE INDEX bulletins_last_heard_at ON bulletins(last_heard_at)',
       );
+    },
+    onUpgrade: (m, from, to) async {
+      // v1 → v2: telemetry_definitions table (additive; no data touched).
+      if (from < 2) {
+        await m.createTable(telemetryDefinitions);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

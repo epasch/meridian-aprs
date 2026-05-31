@@ -1208,6 +1208,25 @@ class AprsParser {
     final addressee = info.substring(1, 10).trim();
     var messageText = info.substring(11);
 
+    // Telemetry definitions (PARM/UNIT/EQNS/BITS) ride on the `:` message DTI
+    // but are metadata, not user messages. Branch to a distinct subtype before
+    // any ACK/REJ or message-ID handling so they never reach the conversation
+    // pipeline. Detection is on the body prefix; the keyword includes the dot.
+    final defKind = _telemetryDefinitionKind(messageText);
+    if (defKind != null) {
+      return _parseTelemetryDefinition(
+        kind: defKind,
+        body: messageText,
+        addressee: addressee,
+        rawLine: rawLine,
+        source: source,
+        destination: destination,
+        path: path,
+        receivedAt: receivedAt,
+        transportSource: transportSource,
+      );
+    }
+
     // Extract optional message ID: '{NNN' suffix (no closing brace per spec).
     String? messageId;
     final idIdx = messageText.lastIndexOf('{');
@@ -1260,6 +1279,83 @@ class AprsParser {
       addressee: addressee,
       message: messageText,
       messageId: messageId?.isEmpty == true ? null : messageId,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Telemetry definitions  (PARM. / UNIT. / EQNS. / BITS. on the `:` DTI)
+  // ---------------------------------------------------------------------------
+
+  /// Returns the definition kind if [body] begins with a telemetry-definition
+  /// keyword (`PARM.`, `UNIT.`, `EQNS.`, `BITS.`), or null otherwise.
+  static TelemetryDefinitionKind? _telemetryDefinitionKind(String body) {
+    if (body.startsWith('PARM.')) return TelemetryDefinitionKind.parm;
+    if (body.startsWith('UNIT.')) return TelemetryDefinitionKind.unit;
+    if (body.startsWith('EQNS.')) return TelemetryDefinitionKind.eqns;
+    if (body.startsWith('BITS.')) return TelemetryDefinitionKind.bits;
+    return null;
+  }
+
+  AprsPacket _parseTelemetryDefinition({
+    required TelemetryDefinitionKind kind,
+    required String body,
+    required String addressee,
+    required String rawLine,
+    required String source,
+    required String destination,
+    required List<String> path,
+    required DateTime receivedAt,
+    required PacketSource transportSource,
+  }) {
+    // Drop the 5-char keyword (e.g. "PARM."). A trailing `{NNN` message id is
+    // rare on definitions but legal; strip it so it never pollutes the payload.
+    var payload = body.substring(5);
+    final idIdx = payload.lastIndexOf('{');
+    if (idIdx >= 0) payload = payload.substring(0, idIdx);
+
+    var labels = const <String>[];
+    var coefficients = const <double?>[];
+    var bitSense = const <bool>[];
+    String? projectTitle;
+
+    switch (kind) {
+      case TelemetryDefinitionKind.parm:
+      case TelemetryDefinitionKind.unit:
+        // Up to 13 comma-separated labels (5 analog + 8 binary). Blanks kept.
+        labels = [for (final t in payload.split(',').take(13)) t.trim()];
+      case TelemetryDefinitionKind.eqns:
+        // Flat list of coefficients (conventionally 5×3). Tolerate truncation
+        // and unparseable fields (null); the service applies per-channel
+        // defaults and chunks into triples.
+        coefficients = [
+          for (final t in payload.split(',')) double.tryParse(t.trim()),
+        ];
+      case TelemetryDefinitionKind.bits:
+        // `mask,Project Title` — the sense mask is the run of bit chars before
+        // the first comma; everything after it is the title (may contain
+        // commas, so split only once).
+        final comma = payload.indexOf(',');
+        final mask = comma >= 0 ? payload.substring(0, comma) : payload;
+        bitSense = [for (final c in mask.split('')) c == '1'];
+        if (comma >= 0) {
+          final title = payload.substring(comma + 1).trim();
+          if (title.isNotEmpty) projectTitle = title;
+        }
+    }
+
+    return TelemetryDefinitionPacket(
+      rawLine: rawLine,
+      source: source,
+      destination: destination,
+      path: path,
+      receivedAt: receivedAt,
+      transportSource: transportSource,
+      addressee: addressee,
+      kind: kind,
+      labels: labels,
+      coefficients: coefficients,
+      bitSense: bitSense,
+      projectTitle: projectTitle,
     );
   }
 

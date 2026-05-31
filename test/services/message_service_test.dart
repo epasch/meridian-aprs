@@ -688,4 +688,40 @@ void main() {
       },
     );
   });
+
+  // --- Telemetry definitions must bypass the conversation pipeline --------
+
+  group('telemetry definitions are not messages', () {
+    // The Kenwood TH-D75 (and many telemetry stations) address PARM/UNIT/EQNS/
+    // BITS definitions to their own callsign. These ride the `:` message DTI
+    // but are metadata — the parser yields a TelemetryDefinitionPacket, so
+    // MessageService (which only acts on MessagePacket) must ignore them: no
+    // phantom conversation, and no auto-ACK even when a `{NNN` id is present.
+    test(
+      'PARM addressed to our own callsign creates no thread, no ACK',
+      () async {
+        final f = await _Fixture.create(); // we are W1AW-9
+        f.stationService.ingestLine(
+          'W1AW-9>APMDN0::W1AW-9   :PARM.Battery,Temp,Solar{007',
+        );
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        expect(f.service.conversations, isEmpty);
+        expect(f.service.totalUnread, equals(0));
+        expect(f.sentLines, isEmpty);
+      },
+    );
+
+    test('EQNS/UNIT/BITS to our callsign likewise create no threads', () async {
+      final f = await _Fixture.create();
+      f.stationService
+        ..ingestLine('W1AW-9>APMDN0::W1AW-9   :UNIT.Volts,degF')
+        ..ingestLine('W1AW-9>APMDN0::W1AW-9   :EQNS.0,1,0')
+        ..ingestLine('W1AW-9>APMDN0::W1AW-9   :BITS.10000000,Shack');
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      expect(f.service.conversations, isEmpty);
+      expect(f.sentLines, isEmpty);
+    });
+  });
 }

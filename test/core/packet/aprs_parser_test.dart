@@ -1956,4 +1956,85 @@ void main() {
       expect(p.message, equals('?WX?'));
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Telemetry definitions (PARM./UNIT./EQNS./BITS. on the `:` message DTI)
+  // -------------------------------------------------------------------------
+  group('TelemetryDefinitionPacket', () {
+    test('PARM. decodes to parameter-name labels', () {
+      final p = expectPacketType<TelemetryDefinitionPacket>(
+        'N0CALL>APRS::N0CALL-5 :PARM.Battery,Temp,Solar,RxCt,TxCt,Door,Fan',
+      );
+      expect(p.kind, equals(TelemetryDefinitionKind.parm));
+      expect(p.addressee, equals('N0CALL-5')); // SSID preserved
+      expect(
+        p.labels,
+        equals(['Battery', 'Temp', 'Solar', 'RxCt', 'TxCt', 'Door', 'Fan']),
+      );
+    });
+
+    test('UNIT. decodes to unit labels', () {
+      final p = expectPacketType<TelemetryDefinitionPacket>(
+        'N0CALL>APRS::N0CALL-5 :UNIT.Volts,degF,Watts,Pkts,Pkts',
+      );
+      expect(p.kind, equals(TelemetryDefinitionKind.unit));
+      expect(p.labels, equals(['Volts', 'degF', 'Watts', 'Pkts', 'Pkts']));
+    });
+
+    test('EQNS. decodes coefficients as a flat list', () {
+      final p = expectPacketType<TelemetryDefinitionPacket>(
+        'N0CALL>APRS::N0CALL-5 :EQNS.0,0.075,0,0,1,0,0,1,0',
+      );
+      expect(p.kind, equals(TelemetryDefinitionKind.eqns));
+      expect(p.coefficients, equals(<double>[0, 0.075, 0, 0, 1, 0, 0, 1, 0]));
+    });
+
+    test('EQNS. tolerates truncation and unparseable fields', () {
+      final p = expectPacketType<TelemetryDefinitionPacket>(
+        'N0CALL>APRS::N0CALL-5 :EQNS.0,2,,0,1',
+      );
+      expect(p.coefficients, equals(<double?>[0, 2, null, 0, 1]));
+    });
+
+    test('BITS. decodes the sense mask and keeps a comma-bearing title', () {
+      final p = expectPacketType<TelemetryDefinitionPacket>(
+        'N0CALL>APRS::N0CALL-5 :BITS.10110000,Shack Sensors, rev 2',
+      );
+      expect(p.kind, equals(TelemetryDefinitionKind.bits));
+      expect(
+        p.bitSense,
+        equals([true, false, true, true, false, false, false, false]),
+      );
+      expect(p.projectTitle, equals('Shack Sensors, rev 2'));
+    });
+
+    test('definition addressed to another station is still a definition', () {
+      // Definitions are frequently sent BY a base FOR a remote tracker, so the
+      // addressee (the described station) is what matters — not whether it is
+      // addressed to us. Either way it must never become a MessagePacket.
+      final p = expectPacketType<TelemetryDefinitionPacket>(
+        'N0BASE>APRS::N0RMOTE-9:PARM.Speed,Volts',
+      );
+      expect(p.addressee, equals('N0RMOTE-9'));
+    });
+
+    test('a trailing {NNN message id is stripped from the payload', () {
+      final p = expectPacketType<TelemetryDefinitionPacket>(
+        'N0CALL>APRS::N0CALL-5 :PARM.Battery,Temp{045',
+      );
+      expect(p.labels, equals(['Battery', 'Temp']));
+    });
+
+    test(
+      'an ordinary message merely mentioning PARM stays a MessagePacket',
+      () {
+        // Detection requires the keyword at the very start with its dot; a user
+        // sentence must not be hijacked.
+        final p = expectPacketType<MessagePacket>(
+          'N0CALL>APRS::N0CALL-5 :the PARM. settings look good',
+        );
+        expect(p.message, equals('the PARM. settings look good'));
+      },
+    );
+  });
 }

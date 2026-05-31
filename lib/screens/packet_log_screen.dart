@@ -193,7 +193,8 @@ class _PacketListState extends State<_PacketList> {
       _PacketFilter.item => p is ItemPacket,
       _PacketFilter.status => p is StatusPacket,
       _PacketFilter.micE => p is MicEPacket,
-      _PacketFilter.tel => p is TelemetryPacket,
+      _PacketFilter.tel =>
+        p is TelemetryPacket || p is TelemetryDefinitionPacket,
     };
   }
 
@@ -387,6 +388,7 @@ class _PacketRow extends StatelessWidget {
       StatusPacket() => 'STATUS',
       MicEPacket() => 'MIC-E',
       TelemetryPacket() => 'TEL',
+      TelemetryDefinitionPacket() => 'TEL DEF',
       QueryPacket() => 'QUERY',
       CapabilitiesPacket() => 'CAP',
       UnknownPacket() => '???',
@@ -405,6 +407,7 @@ class _PacketRow extends StatelessWidget {
       MicEPacket() =>
         '${_latStr(p.lat)}, ${_lonStr(p.lon)} \u2022 ${p.micEMessage}',
       TelemetryPacket() => _telSummary(p),
+      TelemetryDefinitionPacket() => _telDefSummary(p),
       QueryPacket() => '? ${p.query}',
       CapabilitiesPacket() => p.capabilities,
       UnknownPacket() =>
@@ -444,6 +447,24 @@ class _PacketRow extends StatelessWidget {
     final seq = p.sequence.isEmpty ? '' : '#${p.sequence} ';
     if (seq.isEmpty) return vals.isEmpty ? 'telemetry' : vals;
     return vals.isEmpty ? '${seq}telemetry' : '$seq• $vals';
+  }
+
+  static String _telDefSummary(TelemetryDefinitionPacket p) {
+    final kind = switch (p.kind) {
+      TelemetryDefinitionKind.parm => 'names',
+      TelemetryDefinitionKind.unit => 'units',
+      TelemetryDefinitionKind.eqns => 'equations',
+      TelemetryDefinitionKind.bits => 'bits',
+    };
+    final detail = switch (p.kind) {
+      TelemetryDefinitionKind.parm || TelemetryDefinitionKind.unit =>
+        p.labels.where((l) => l.isNotEmpty).join(', '),
+      TelemetryDefinitionKind.eqns =>
+        p.coefficients.map((c) => c == null ? '—' : _trimNum(c)).join(', '),
+      TelemetryDefinitionKind.bits => p.projectTitle ?? '',
+    };
+    final defFor = '${p.addressee} $kind';
+    return detail.isEmpty ? defFor : '$defFor • $detail';
   }
 }
 
