@@ -230,6 +230,15 @@ Deferred to the desktop follow-on phase (was Phase 3):
 
 ---
 
+### Telemetry (interstitial, between v0.21 and v0.22)
+
+Not a numbered milestone — a focused protocol-decoding effort delivered in two units.
+
+- **Unit 1 — decode (shipped, #131/#132):** `T#` telemetry data reports, third-party traffic (`}`) unwrapping, positioned weather (`_` symbol), queries (`?`), capabilities (`<`), and Kenwood TH-D75 Mic-E device ID. Test fixtures anonymised to `N0CALL`-style placeholders.
+- **Unit 2 — definitions (shipped, ADR-070):** PARM/UNIT/EQNS/BITS parsed into a distinct `TelemetryDefinitionPacket` (kept out of the message/conversation pipeline), accumulated per station by a drift-backed `TelemetryService`, and correlated to data reports (`addressee` ↔ `source`, SSID-specific). The packet detail sheet now renders labelled, EQNS-scaled, unit-tagged channels with a raw-number fallback. Introduced the app's first schema migration (v1 → v2, additive `telemetry_definitions` table).
+
+---
+
 ### v0.22 — Polish & A11y
 
 Pre-launch polish. The same surfaces being touched for accessibility and adaptive-widget cleanup are the ones that need pinning widget tests, so this milestone co-locates all three.
@@ -291,4 +300,4 @@ Items that were filed as issues but deferred without scheduling. Each is tracked
 
 ---
 
-*Last updated: 2026-05-30*
+*Last updated: 2026-05-31*

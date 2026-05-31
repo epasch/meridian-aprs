@@ -4466,6 +4466,502 @@ class OutgoingBulletinsCompanion extends UpdateCompanion<OutgoingBulletinRow> {
   }
 }
 
+class $TelemetryDefinitionsTable extends TelemetryDefinitions
+    with TableInfo<$TelemetryDefinitionsTable, TelemetryDefinitionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TelemetryDefinitionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _stationMeta = const VerificationMeta(
+    'station',
+  );
+  @override
+  late final GeneratedColumn<String> station = GeneratedColumn<String>(
+    'station',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _parameterNamesMeta = const VerificationMeta(
+    'parameterNames',
+  );
+  @override
+  late final GeneratedColumn<String> parameterNames = GeneratedColumn<String>(
+    'parameter_names',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _unitsMeta = const VerificationMeta('units');
+  @override
+  late final GeneratedColumn<String> units = GeneratedColumn<String>(
+    'units',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _equationsMeta = const VerificationMeta(
+    'equations',
+  );
+  @override
+  late final GeneratedColumn<String> equations = GeneratedColumn<String>(
+    'equations',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bitSenseMeta = const VerificationMeta(
+    'bitSense',
+  );
+  @override
+  late final GeneratedColumn<String> bitSense = GeneratedColumn<String>(
+    'bit_sense',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _projectTitleMeta = const VerificationMeta(
+    'projectTitle',
+  );
+  @override
+  late final GeneratedColumn<String> projectTitle = GeneratedColumn<String>(
+    'project_title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    station,
+    parameterNames,
+    units,
+    equations,
+    bitSense,
+    projectTitle,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'telemetry_definitions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TelemetryDefinitionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('station')) {
+      context.handle(
+        _stationMeta,
+        station.isAcceptableOrUnknown(data['station']!, _stationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stationMeta);
+    }
+    if (data.containsKey('parameter_names')) {
+      context.handle(
+        _parameterNamesMeta,
+        parameterNames.isAcceptableOrUnknown(
+          data['parameter_names']!,
+          _parameterNamesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('units')) {
+      context.handle(
+        _unitsMeta,
+        units.isAcceptableOrUnknown(data['units']!, _unitsMeta),
+      );
+    }
+    if (data.containsKey('equations')) {
+      context.handle(
+        _equationsMeta,
+        equations.isAcceptableOrUnknown(data['equations']!, _equationsMeta),
+      );
+    }
+    if (data.containsKey('bit_sense')) {
+      context.handle(
+        _bitSenseMeta,
+        bitSense.isAcceptableOrUnknown(data['bit_sense']!, _bitSenseMeta),
+      );
+    }
+    if (data.containsKey('project_title')) {
+      context.handle(
+        _projectTitleMeta,
+        projectTitle.isAcceptableOrUnknown(
+          data['project_title']!,
+          _projectTitleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {station};
+  @override
+  TelemetryDefinitionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TelemetryDefinitionRow(
+      station: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}station'],
+      )!,
+      parameterNames: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parameter_names'],
+      ),
+      units: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}units'],
+      ),
+      equations: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}equations'],
+      ),
+      bitSense: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bit_sense'],
+      ),
+      projectTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_title'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TelemetryDefinitionsTable createAlias(String alias) {
+    return $TelemetryDefinitionsTable(attachedDatabase, alias);
+  }
+}
+
+class TelemetryDefinitionRow extends DataClass
+    implements Insertable<TelemetryDefinitionRow> {
+  final String station;
+
+  /// PARM labels, comma-joined (`Battery,Temp,...`).
+  final String? parameterNames;
+
+  /// UNIT labels, comma-joined.
+  final String? units;
+
+  /// EQNS coefficients, comma-joined (`0,0.075,0,...`).
+  final String? equations;
+
+  /// BITS sense mask as transmitted (`10110000`).
+  final String? bitSense;
+
+  /// BITS project title, verbatim.
+  final String? projectTitle;
+  final int updatedAt;
+  const TelemetryDefinitionRow({
+    required this.station,
+    this.parameterNames,
+    this.units,
+    this.equations,
+    this.bitSense,
+    this.projectTitle,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['station'] = Variable<String>(station);
+    if (!nullToAbsent || parameterNames != null) {
+      map['parameter_names'] = Variable<String>(parameterNames);
+    }
+    if (!nullToAbsent || units != null) {
+      map['units'] = Variable<String>(units);
+    }
+    if (!nullToAbsent || equations != null) {
+      map['equations'] = Variable<String>(equations);
+    }
+    if (!nullToAbsent || bitSense != null) {
+      map['bit_sense'] = Variable<String>(bitSense);
+    }
+    if (!nullToAbsent || projectTitle != null) {
+      map['project_title'] = Variable<String>(projectTitle);
+    }
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  TelemetryDefinitionsCompanion toCompanion(bool nullToAbsent) {
+    return TelemetryDefinitionsCompanion(
+      station: Value(station),
+      parameterNames: parameterNames == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parameterNames),
+      units: units == null && nullToAbsent
+          ? const Value.absent()
+          : Value(units),
+      equations: equations == null && nullToAbsent
+          ? const Value.absent()
+          : Value(equations),
+      bitSense: bitSense == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bitSense),
+      projectTitle: projectTitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(projectTitle),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory TelemetryDefinitionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TelemetryDefinitionRow(
+      station: serializer.fromJson<String>(json['station']),
+      parameterNames: serializer.fromJson<String?>(json['parameterNames']),
+      units: serializer.fromJson<String?>(json['units']),
+      equations: serializer.fromJson<String?>(json['equations']),
+      bitSense: serializer.fromJson<String?>(json['bitSense']),
+      projectTitle: serializer.fromJson<String?>(json['projectTitle']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'station': serializer.toJson<String>(station),
+      'parameterNames': serializer.toJson<String?>(parameterNames),
+      'units': serializer.toJson<String?>(units),
+      'equations': serializer.toJson<String?>(equations),
+      'bitSense': serializer.toJson<String?>(bitSense),
+      'projectTitle': serializer.toJson<String?>(projectTitle),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  TelemetryDefinitionRow copyWith({
+    String? station,
+    Value<String?> parameterNames = const Value.absent(),
+    Value<String?> units = const Value.absent(),
+    Value<String?> equations = const Value.absent(),
+    Value<String?> bitSense = const Value.absent(),
+    Value<String?> projectTitle = const Value.absent(),
+    int? updatedAt,
+  }) => TelemetryDefinitionRow(
+    station: station ?? this.station,
+    parameterNames: parameterNames.present
+        ? parameterNames.value
+        : this.parameterNames,
+    units: units.present ? units.value : this.units,
+    equations: equations.present ? equations.value : this.equations,
+    bitSense: bitSense.present ? bitSense.value : this.bitSense,
+    projectTitle: projectTitle.present ? projectTitle.value : this.projectTitle,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  TelemetryDefinitionRow copyWithCompanion(TelemetryDefinitionsCompanion data) {
+    return TelemetryDefinitionRow(
+      station: data.station.present ? data.station.value : this.station,
+      parameterNames: data.parameterNames.present
+          ? data.parameterNames.value
+          : this.parameterNames,
+      units: data.units.present ? data.units.value : this.units,
+      equations: data.equations.present ? data.equations.value : this.equations,
+      bitSense: data.bitSense.present ? data.bitSense.value : this.bitSense,
+      projectTitle: data.projectTitle.present
+          ? data.projectTitle.value
+          : this.projectTitle,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TelemetryDefinitionRow(')
+          ..write('station: $station, ')
+          ..write('parameterNames: $parameterNames, ')
+          ..write('units: $units, ')
+          ..write('equations: $equations, ')
+          ..write('bitSense: $bitSense, ')
+          ..write('projectTitle: $projectTitle, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    station,
+    parameterNames,
+    units,
+    equations,
+    bitSense,
+    projectTitle,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TelemetryDefinitionRow &&
+          other.station == this.station &&
+          other.parameterNames == this.parameterNames &&
+          other.units == this.units &&
+          other.equations == this.equations &&
+          other.bitSense == this.bitSense &&
+          other.projectTitle == this.projectTitle &&
+          other.updatedAt == this.updatedAt);
+}
+
+class TelemetryDefinitionsCompanion
+    extends UpdateCompanion<TelemetryDefinitionRow> {
+  final Value<String> station;
+  final Value<String?> parameterNames;
+  final Value<String?> units;
+  final Value<String?> equations;
+  final Value<String?> bitSense;
+  final Value<String?> projectTitle;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const TelemetryDefinitionsCompanion({
+    this.station = const Value.absent(),
+    this.parameterNames = const Value.absent(),
+    this.units = const Value.absent(),
+    this.equations = const Value.absent(),
+    this.bitSense = const Value.absent(),
+    this.projectTitle = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TelemetryDefinitionsCompanion.insert({
+    required String station,
+    this.parameterNames = const Value.absent(),
+    this.units = const Value.absent(),
+    this.equations = const Value.absent(),
+    this.bitSense = const Value.absent(),
+    this.projectTitle = const Value.absent(),
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : station = Value(station),
+       updatedAt = Value(updatedAt);
+  static Insertable<TelemetryDefinitionRow> custom({
+    Expression<String>? station,
+    Expression<String>? parameterNames,
+    Expression<String>? units,
+    Expression<String>? equations,
+    Expression<String>? bitSense,
+    Expression<String>? projectTitle,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (station != null) 'station': station,
+      if (parameterNames != null) 'parameter_names': parameterNames,
+      if (units != null) 'units': units,
+      if (equations != null) 'equations': equations,
+      if (bitSense != null) 'bit_sense': bitSense,
+      if (projectTitle != null) 'project_title': projectTitle,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TelemetryDefinitionsCompanion copyWith({
+    Value<String>? station,
+    Value<String?>? parameterNames,
+    Value<String?>? units,
+    Value<String?>? equations,
+    Value<String?>? bitSense,
+    Value<String?>? projectTitle,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return TelemetryDefinitionsCompanion(
+      station: station ?? this.station,
+      parameterNames: parameterNames ?? this.parameterNames,
+      units: units ?? this.units,
+      equations: equations ?? this.equations,
+      bitSense: bitSense ?? this.bitSense,
+      projectTitle: projectTitle ?? this.projectTitle,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (station.present) {
+      map['station'] = Variable<String>(station.value);
+    }
+    if (parameterNames.present) {
+      map['parameter_names'] = Variable<String>(parameterNames.value);
+    }
+    if (units.present) {
+      map['units'] = Variable<String>(units.value);
+    }
+    if (equations.present) {
+      map['equations'] = Variable<String>(equations.value);
+    }
+    if (bitSense.present) {
+      map['bit_sense'] = Variable<String>(bitSense.value);
+    }
+    if (projectTitle.present) {
+      map['project_title'] = Variable<String>(projectTitle.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TelemetryDefinitionsCompanion(')
+          ..write('station: $station, ')
+          ..write('parameterNames: $parameterNames, ')
+          ..write('units: $units, ')
+          ..write('equations: $equations, ')
+          ..write('bitSense: $bitSense, ')
+          ..write('projectTitle: $projectTitle, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$MeridianDatabase extends GeneratedDatabase {
   _$MeridianDatabase(QueryExecutor e) : super(e);
   $MeridianDatabaseManager get managers => $MeridianDatabaseManager(this);
@@ -4481,10 +4977,14 @@ abstract class _$MeridianDatabase extends GeneratedDatabase {
   late final $BulletinsTable bulletins = $BulletinsTable(this);
   late final $OutgoingBulletinsTable outgoingBulletins =
       $OutgoingBulletinsTable(this);
+  late final $TelemetryDefinitionsTable telemetryDefinitions =
+      $TelemetryDefinitionsTable(this);
   late final StationDao stationDao = StationDao(this as MeridianDatabase);
   late final PacketDao packetDao = PacketDao(this as MeridianDatabase);
   late final MessageDao messageDao = MessageDao(this as MeridianDatabase);
   late final BulletinDao bulletinDao = BulletinDao(this as MeridianDatabase);
+  late final TelemetryDefinitionDao telemetryDefinitionDao =
+      TelemetryDefinitionDao(this as MeridianDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4498,6 +4998,7 @@ abstract class _$MeridianDatabase extends GeneratedDatabase {
     groupMessageEntries,
     bulletins,
     outgoingBulletins,
+    telemetryDefinitions,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -7252,6 +7753,264 @@ typedef $$OutgoingBulletinsTableProcessedTableManager =
       OutgoingBulletinRow,
       PrefetchHooks Function()
     >;
+typedef $$TelemetryDefinitionsTableCreateCompanionBuilder =
+    TelemetryDefinitionsCompanion Function({
+      required String station,
+      Value<String?> parameterNames,
+      Value<String?> units,
+      Value<String?> equations,
+      Value<String?> bitSense,
+      Value<String?> projectTitle,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$TelemetryDefinitionsTableUpdateCompanionBuilder =
+    TelemetryDefinitionsCompanion Function({
+      Value<String> station,
+      Value<String?> parameterNames,
+      Value<String?> units,
+      Value<String?> equations,
+      Value<String?> bitSense,
+      Value<String?> projectTitle,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$TelemetryDefinitionsTableFilterComposer
+    extends Composer<_$MeridianDatabase, $TelemetryDefinitionsTable> {
+  $$TelemetryDefinitionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get station => $composableBuilder(
+    column: $table.station,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parameterNames => $composableBuilder(
+    column: $table.parameterNames,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get units => $composableBuilder(
+    column: $table.units,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get equations => $composableBuilder(
+    column: $table.equations,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bitSense => $composableBuilder(
+    column: $table.bitSense,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectTitle => $composableBuilder(
+    column: $table.projectTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TelemetryDefinitionsTableOrderingComposer
+    extends Composer<_$MeridianDatabase, $TelemetryDefinitionsTable> {
+  $$TelemetryDefinitionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get station => $composableBuilder(
+    column: $table.station,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get parameterNames => $composableBuilder(
+    column: $table.parameterNames,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get units => $composableBuilder(
+    column: $table.units,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get equations => $composableBuilder(
+    column: $table.equations,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bitSense => $composableBuilder(
+    column: $table.bitSense,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectTitle => $composableBuilder(
+    column: $table.projectTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TelemetryDefinitionsTableAnnotationComposer
+    extends Composer<_$MeridianDatabase, $TelemetryDefinitionsTable> {
+  $$TelemetryDefinitionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get station =>
+      $composableBuilder(column: $table.station, builder: (column) => column);
+
+  GeneratedColumn<String> get parameterNames => $composableBuilder(
+    column: $table.parameterNames,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get units =>
+      $composableBuilder(column: $table.units, builder: (column) => column);
+
+  GeneratedColumn<String> get equations =>
+      $composableBuilder(column: $table.equations, builder: (column) => column);
+
+  GeneratedColumn<String> get bitSense =>
+      $composableBuilder(column: $table.bitSense, builder: (column) => column);
+
+  GeneratedColumn<String> get projectTitle => $composableBuilder(
+    column: $table.projectTitle,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$TelemetryDefinitionsTableTableManager
+    extends
+        RootTableManager<
+          _$MeridianDatabase,
+          $TelemetryDefinitionsTable,
+          TelemetryDefinitionRow,
+          $$TelemetryDefinitionsTableFilterComposer,
+          $$TelemetryDefinitionsTableOrderingComposer,
+          $$TelemetryDefinitionsTableAnnotationComposer,
+          $$TelemetryDefinitionsTableCreateCompanionBuilder,
+          $$TelemetryDefinitionsTableUpdateCompanionBuilder,
+          (
+            TelemetryDefinitionRow,
+            BaseReferences<
+              _$MeridianDatabase,
+              $TelemetryDefinitionsTable,
+              TelemetryDefinitionRow
+            >,
+          ),
+          TelemetryDefinitionRow,
+          PrefetchHooks Function()
+        > {
+  $$TelemetryDefinitionsTableTableManager(
+    _$MeridianDatabase db,
+    $TelemetryDefinitionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TelemetryDefinitionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TelemetryDefinitionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$TelemetryDefinitionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> station = const Value.absent(),
+                Value<String?> parameterNames = const Value.absent(),
+                Value<String?> units = const Value.absent(),
+                Value<String?> equations = const Value.absent(),
+                Value<String?> bitSense = const Value.absent(),
+                Value<String?> projectTitle = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TelemetryDefinitionsCompanion(
+                station: station,
+                parameterNames: parameterNames,
+                units: units,
+                equations: equations,
+                bitSense: bitSense,
+                projectTitle: projectTitle,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String station,
+                Value<String?> parameterNames = const Value.absent(),
+                Value<String?> units = const Value.absent(),
+                Value<String?> equations = const Value.absent(),
+                Value<String?> bitSense = const Value.absent(),
+                Value<String?> projectTitle = const Value.absent(),
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TelemetryDefinitionsCompanion.insert(
+                station: station,
+                parameterNames: parameterNames,
+                units: units,
+                equations: equations,
+                bitSense: bitSense,
+                projectTitle: projectTitle,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TelemetryDefinitionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MeridianDatabase,
+      $TelemetryDefinitionsTable,
+      TelemetryDefinitionRow,
+      $$TelemetryDefinitionsTableFilterComposer,
+      $$TelemetryDefinitionsTableOrderingComposer,
+      $$TelemetryDefinitionsTableAnnotationComposer,
+      $$TelemetryDefinitionsTableCreateCompanionBuilder,
+      $$TelemetryDefinitionsTableUpdateCompanionBuilder,
+      (
+        TelemetryDefinitionRow,
+        BaseReferences<
+          _$MeridianDatabase,
+          $TelemetryDefinitionsTable,
+          TelemetryDefinitionRow
+        >,
+      ),
+      TelemetryDefinitionRow,
+      PrefetchHooks Function()
+    >;
 
 class $MeridianDatabaseManager {
   final _$MeridianDatabase _db;
@@ -7272,4 +8031,6 @@ class $MeridianDatabaseManager {
       $$BulletinsTableTableManager(_db, _db.bulletins);
   $$OutgoingBulletinsTableTableManager get outgoingBulletins =>
       $$OutgoingBulletinsTableTableManager(_db, _db.outgoingBulletins);
+  $$TelemetryDefinitionsTableTableManager get telemetryDefinitions =>
+      $$TelemetryDefinitionsTableTableManager(_db, _db.telemetryDefinitions);
 }

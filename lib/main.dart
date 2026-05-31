@@ -31,6 +31,7 @@ import 'database/daos/bulletin_dao.dart';
 import 'database/daos/message_dao.dart';
 import 'database/daos/packet_dao.dart';
 import 'database/daos/station_dao.dart';
+import 'database/daos/telemetry_definition_dao.dart';
 import 'database/database_provider.dart';
 import 'database/meridian_database.dart';
 import 'map/stadia_tile_provider.dart';
@@ -47,6 +48,7 @@ import 'services/message_service.dart';
 import 'services/messaging_settings_service.dart';
 import 'services/station_service.dart';
 import 'services/station_settings_service.dart';
+import 'services/telemetry_service.dart';
 import 'services/tx_service.dart';
 import 'theme/android_theme.dart';
 import 'theme/desktop_theme.dart';
@@ -262,6 +264,16 @@ Future<void> main() async {
   );
   await messageService.loadHistory();
 
+  // Telemetry definitions (PARM/UNIT/EQNS/BITS) accumulate per station so
+  // telemetry data reports render labelled, scaled channels (ADR-070). Listens
+  // to the same packet stream as MessageService; definition packets are a
+  // distinct type, so they never enter the conversation pipeline.
+  final telemetryService = TelemetryService(
+    stations: service,
+    dao: database.telemetryDefinitionDao,
+  );
+  await telemetryService.load();
+
   final bannerController = InAppBannerController();
   final notificationService = NotificationService(
     messageService: messageService,
@@ -339,6 +351,9 @@ Future<void> main() async {
         Provider<PacketDao>.value(value: database.packetDao),
         Provider<MessageDao>.value(value: database.messageDao),
         Provider<BulletinDao>.value(value: database.bulletinDao),
+        Provider<TelemetryDefinitionDao>.value(
+          value: database.telemetryDefinitionDao,
+        ),
         ChangeNotifierProvider<StationService>.value(value: service),
         ChangeNotifierProvider<ConnectionRegistry>.value(value: registry),
         ChangeNotifierProvider<StationSettingsService>.value(
@@ -360,6 +375,7 @@ Future<void> main() async {
           value: messagingSettings,
         ),
         ChangeNotifierProvider<MessageService>.value(value: messageService),
+        ChangeNotifierProvider<TelemetryService>.value(value: telemetryService),
         ChangeNotifierProvider<BackgroundServiceManager>.value(
           value: bgServiceManager,
         ),

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/packet/aprs_packet.dart';
+import '../../models/telemetry_definition.dart';
+import '../../services/telemetry_service.dart';
 import 'aprs_symbol_widget.dart';
 
 /// Shows a modal bottom sheet with the full decoded detail of an [AprsPacket].
@@ -10,17 +13,28 @@ import 'aprs_symbol_widget.dart';
 /// showPacketDetailSheet(context, packet);
 /// ```
 void showPacketDetailSheet(BuildContext context, AprsPacket packet) {
+  // Resolve the telemetry definition here, where the provider is in scope, so
+  // the sheet itself stays a pure presentation widget. Only data reports need
+  // one; the lookup correlates the report's source with a stored definition.
+  TelemetryDefinition? definition;
+  if (packet is TelemetryPacket) {
+    definition = context.read<TelemetryService>().definitionFor(packet.source);
+  }
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    builder: (_) => PacketDetailSheet(packet: packet),
+    builder: (_) => PacketDetailSheet(packet: packet, definition: definition),
   );
 }
 
 class PacketDetailSheet extends StatelessWidget {
-  const PacketDetailSheet({super.key, required this.packet});
+  const PacketDetailSheet({super.key, required this.packet, this.definition});
 
   final AprsPacket packet;
+
+  /// Telemetry definition correlated to [packet] (only for [TelemetryPacket]);
+  /// null when none has been heard, in which case channels render raw.
+  final TelemetryDefinition? definition;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +42,7 @@ class PacketDetailSheet extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    final fields = _decodedFields(packet);
+    final fields = decodedFields(packet, definition);
     final symbol = _symbolFor(packet);
 
     return SafeArea(
@@ -135,7 +149,16 @@ class PacketDetailSheet extends StatelessWidget {
   }
 
   /// Builds an ordered map of label → value for all meaningful decoded fields.
-  Map<String, String> _decodedFields(AprsPacket p) {
+  ///
+  /// [definition] is consulted only for [TelemetryPacket]s, to label and scale
+  /// channels; null renders raw values. Exposed for testing so the
+  /// telemetry-labelling logic can be asserted without pumping the lazy
+  /// scroll view.
+  @visibleForTesting
+  static Map<String, String> decodedFields(
+    AprsPacket p,
+    TelemetryDefinition? definition,
+  ) {
     final m = <String, String>{};
 
     // Common header fields
@@ -265,15 +288,62 @@ class PacketDetailSheet extends StatelessWidget {
       case TelemetryPacket():
         m['Type'] = 'Telemetry';
         if (p.sequence.isNotEmpty) m['Sequence'] = p.sequence;
+        final def = definition;
+        if (def?.projectTitle != null) m['Project'] = def!.projectTitle!;
         for (var i = 0; i < p.analog.length; i++) {
           final v = p.analog[i];
-          m['Analog ${i + 1}'] = v == null ? '—' : _trimNum(v);
+          // Prefer the defined channel name; otherwise a generic ordinal.
+          final name = def?.nameAt(i) ?? 'Analog ${i + 1}';
+          final unit = def?.unitAt(i);
+          if (v == null) {
+            m[name] = '—';
+          } else if (def != null && def.hasScaling(i)) {
+            // Show the scaled, unit-tagged value with the raw count alongside.
+            final scaled = _trimNum(def.scaleAnalog(i, v));
+            final tagged = unit == null ? scaled : '$scaled $unit';
+            m[name] = '$tagged (raw ${_trimNum(v)})';
+          } else {
+            final raw = _trimNum(v);
+            m[name] = unit == null ? raw : '$raw $unit';
+          }
         }
         if (p.digital.isNotEmpty) {
           m['Digital bits'] = p.digital.map((b) => b ? '1' : '0').join();
+          // Per-bit names live at definition channels 5–12.
+          for (var i = 0; i < p.digital.length; i++) {
+            final name = def?.nameAt(5 + i);
+            if (name != null) m[name] = p.digital[i] ? 'on' : 'off';
+          }
         }
         if (p.comment != null && p.comment!.isNotEmpty) {
           m['Comment'] = p.comment!;
+        }
+
+      case TelemetryDefinitionPacket():
+        m['Type'] = 'Telemetry definition';
+        m['Defines'] = p.addressee;
+        switch (p.kind) {
+          case TelemetryDefinitionKind.parm:
+            m['Component'] = 'Parameter names';
+            for (var i = 0; i < p.labels.length; i++) {
+              if (p.labels[i].isNotEmpty) m['Channel ${i + 1}'] = p.labels[i];
+            }
+          case TelemetryDefinitionKind.unit:
+            m['Component'] = 'Units';
+            for (var i = 0; i < p.labels.length; i++) {
+              if (p.labels[i].isNotEmpty) m['Channel ${i + 1}'] = p.labels[i];
+            }
+          case TelemetryDefinitionKind.eqns:
+            m['Component'] = 'Equations';
+            m['Coefficients'] = p.coefficients
+                .map((c) => c == null ? '—' : _trimNum(c))
+                .join(', ');
+          case TelemetryDefinitionKind.bits:
+            m['Component'] = 'Bit sense';
+            if (p.bitSense.isNotEmpty) {
+              m['Sense mask'] = p.bitSense.map((b) => b ? '1' : '0').join();
+            }
+            if (p.projectTitle != null) m['Project'] = p.projectTitle!;
         }
 
       case QueryPacket():

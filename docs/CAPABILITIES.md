@@ -4,7 +4,7 @@ A consolidated reference of what Meridian can do today, organized by user-facing
 
 > **Maintenance:** This document is generated and maintained by Claude Code as part of milestone close-out. When a milestone changes user-visible capabilities or platform behavior, update this file alongside `ROADMAP.md` and `DECISIONS.md`. Source of truth is the codebase, not aspiration — partially implemented or untested capabilities are flagged explicitly.
 
-**Last updated:** 2026-05-30 (v0.21 Classic Bluetooth SPP shipped on Android — native RFCOMM channel, ADR-069, hardware-validated on a TH-D75; desktop deferred)
+**Last updated:** 2026-05-31 (telemetry definitions shipped — PARM/UNIT/EQNS/BITS decoded into `TelemetryDefinitionPacket`, accumulated per station by the drift-backed `TelemetryService`, ADR-070; labelled/scaled `T#` channels in the detail sheet)
 
 ---
 
@@ -47,7 +47,8 @@ Pure-Dart parser dispatching on the APRS Data Type Identifier byte. Sealed `Aprs
 - **ItemPacket** — APRS items
 - **StatusPacket** — text status reports
 - **WeatherPacket** — standalone (`_`) reports **and** weather embedded in an uncompressed position report (`_` symbol code: wind dir/speed from the course/speed slot + wx fields), binned as weather with position so it lands on the map
-- **TelemetryPacket** — `T#` data reports (sequence, up to five analog channels, digital bits); definition messages (PARM/UNIT/EQNS/BITS) tracked for a follow-up
+- **TelemetryPacket** — `T#` data reports (sequence, up to five analog channels, digital bits)
+- **TelemetryDefinitionPacket** — PARM/UNIT/EQNS/BITS definition messages, decoded as a distinct type (kept out of the message/conversation pipeline). Accumulated per station by `TelemetryService` (drift-backed) and correlated to data reports by `addressee` ↔ `source` (SSID-specific), so the detail sheet shows **labelled, EQNS-scaled, unit-tagged** channels — falling back to raw numbers when no definition has been heard
 - **QueryPacket** — general queries (DTI `?`, e.g. `?APRS?`); decoded for visibility, no auto-response
 - **CapabilitiesPacket** — station capabilities (DTI `<`, e.g. `IGATE,MSG_CNT,LOC_CNT`)
 - **Third-party traffic (`}`)** — unwrapped and re-parsed to the inner packet, attributed to the inner source with the relaying gateway recorded (`thirdPartyVia`, shown as "Relayed via" in the detail sheet)
@@ -65,7 +66,6 @@ Pure-Dart parser dispatching on the APRS Data Type Identifier byte. Sealed `Aprs
 
 ### Explicit non-support
 - Object / Item *creation* — display only (creation tracked in `FUTURE_FEATURES.md`)
-- Telemetry *definitions* (PARM/UNIT/EQNS/BITS) — data reports decode now; labelled/scaled channels via a definition store are a planned follow-up
 - Weather embedded in *compressed* positions and in object/item/Mic-E reports — only uncompressed position weather is promoted today (follow-up)
 - Position data extensions PHG / RNG / DFS — left in the comment, not separately decoded
 - Query auto-response — queries are decoded for visibility only
@@ -315,7 +315,7 @@ Y = supported, P = partial / pending validation, — = not supported.
 ## 15. Reference Inventory
 
 - **Architecture overview:** `docs/ARCHITECTURE.md`
-- **Decisions:** `docs/DECISIONS.md` (ADR-001 through ADR-069)
+- **Decisions:** `docs/DECISIONS.md` (ADR-001 through ADR-070)
 - **Roadmap:** `docs/ROADMAP.md`
 - **Future features:** `docs/FUTURE_FEATURES.md`
 - **Theming strategy:** `docs/THEME_PLATFORM_STRATEGY.md`

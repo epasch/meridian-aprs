@@ -465,6 +465,71 @@ class TelemetryPacket extends AprsPacket {
 }
 
 // ---------------------------------------------------------------------------
+// Telemetry definition (PARM / UNIT / EQNS / BITS)
+// ---------------------------------------------------------------------------
+
+/// Which of the four telemetry-definition components this packet carries.
+///
+/// Per APRS 1.0.1 §13 a complete definition is delivered as four *separate*
+/// messages — they arrive independently (often minutes apart) and any subset
+/// may be missing. Each [TelemetryDefinitionPacket] carries exactly one
+/// component; the service layer accumulates them per station.
+enum TelemetryDefinitionKind { parm, unit, eqns, bits }
+
+/// An APRS telemetry-definition packet.
+///
+/// On the wire these are DTI `:` messages whose body begins with `PARM.`,
+/// `UNIT.`, `EQNS.`, or `BITS.`, addressed to the station whose telemetry they
+/// describe (frequently the sender itself, but a base station may define
+/// parameters for a remote tracker). They are deliberately a distinct subtype
+/// — NOT [MessagePacket] — so they never enter the conversation/ACK pipeline
+/// (no phantom threads, no auto-ACK), even when a `{NNN` id is present.
+///
+/// Only the field(s) relevant to [kind] are populated; the others are empty.
+/// The correlation key to a [TelemetryPacket] data report is this packet's
+/// [addressee] matched against the data packet's `source` (SSID preserved).
+class TelemetryDefinitionPacket extends AprsPacket {
+  /// The station this definition describes (correlation target). Trimmed; SSID
+  /// preserved because telemetry is SSID-specific.
+  final String addressee;
+
+  /// Which component this packet carries.
+  final TelemetryDefinitionKind kind;
+
+  /// PARM / UNIT labels in transmission order (up to 13: 5 analog + 8 binary).
+  /// Empty for [TelemetryDefinitionKind.eqns] / [TelemetryDefinitionKind.bits].
+  final List<String> labels;
+
+  /// EQNS coefficients in transmission order (conventionally 5 channels × 3:
+  /// a, b, c with `value = a·v² + b·v + c`). Kept as a flat list — the service
+  /// applies per-channel defaults (a=0, b=1, c=0) and tolerates truncation. A
+  /// null entry marks a field that could not be parsed. Empty for other kinds.
+  final List<double?> coefficients;
+
+  /// BITS 8-bit sense mask (MSB first). Empty for other kinds.
+  final List<bool> bitSense;
+
+  /// Optional project title following the BITS sense mask (`BITS.mask,Title`);
+  /// kept verbatim (a title may itself contain commas). Null for other kinds.
+  final String? projectTitle;
+
+  TelemetryDefinitionPacket({
+    required super.rawLine,
+    required super.source,
+    required super.destination,
+    required super.path,
+    required super.receivedAt,
+    super.transportSource,
+    required this.addressee,
+    required this.kind,
+    this.labels = const [],
+    this.coefficients = const [],
+    this.bitSense = const [],
+    this.projectTitle,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Unknown / catch-all
 // ---------------------------------------------------------------------------
 

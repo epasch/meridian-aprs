@@ -1914,3 +1914,81 @@ directions. This is a radio configuration requirement, not an app defect; it is 
 - `docs/ROADMAP.md` — v0.21 Classic Bluetooth SPP milestone (platform matrix, iOS caveat)
 - Android RFCOMM: `BluetoothDevice.createRfcommSocketToServiceRecord` / `BluetoothAdapter.bondedDevices`
 
+---
+
+## ADR-070: Telemetry definitions — distinct packet type, drift-backed `TelemetryService`, first schema migration
+
+**Date:** 2026-05-31
+**Status:** Accepted
+**Milestone:** Telemetry (Unit 2 — definitions)
+**Related:** ADR-067 (drift persistence), ADR-057/058/062 (BulletinService pattern this mirrors), ADR-055 (addressee classification precedence)
+
+### Context
+
+Meridian already decodes APRS telemetry **data** reports (`T#`, → `TelemetryPacket`) but shows them as
+raw channel numbers. The labels, units, and scaling that make telemetry legible arrive separately as
+the four **definition** components — `PARM` (channel names), `UNIT` (units), `EQNS` (scaling
+coefficients), `BITS` (binary sense mask + project title), APRS 1.0.1 §13. Three facts shape the
+design:
+
+1. **A definition is four independent messages.** PARM/UNIT/EQNS/BITS arrive as separate packets,
+   often minutes apart, and any subset may be missing. Partial definitions are the normal case.
+2. **They ride the `:` message DTI but are not user messages.** On the wire a definition is
+   `:ADDRESSEE :PARM.…`, addressed to the station it describes — frequently the sender itself (a
+   Kenwood TH-D75 sends its telemetry definitions to its own callsign), but a base station may also
+   define parameters for a remote tracker.
+3. **The correlation key is the definition's `addressee`, matched to a data report's `source`** —
+   SSID preserved, because telemetry is SSID-specific (`N0CALL-9` ≠ `N0CALL-1`).
+
+> **Interop tradeoff (SSID-strict).** Because correlation keeps the SSID, a station that *sends*
+> `T#` data under one SSID but *addresses* its definitions to a different one (e.g. data from `-7`,
+> defs to the bare base call) will not correlate — its channels render as raw numbers. This is the
+> spec-correct behaviour (definitions are per-SSID) and the fallback is graceful (raw values, no
+> error), but it is the most likely real-world "why aren't my labels showing?" case and should be
+> verified against live hardware.
+
+### Decision
+
+- **Parse definitions into a distinct sealed subtype, `TelemetryDefinitionPacket`** (carrying a
+  `kind {parm,unit,eqns,bits}` + that one component's payload), branched in `_parseMessage` on the
+  body prefix *before* any ACK/REJ or message-ID handling. Because `MessageService._onPacket` opens
+  with `if (packet is! MessagePacket) return;`, a distinct type keeps definitions out of the
+  conversation/ACK pipeline for free — **no phantom thread, and no auto-ACK even when a `{NNN` id is
+  present** (definitions are never ACKed). A new append-safe `PacketTypeTag.telemetryDefinition` tags
+  them for persistence; in the packet log they fold under the existing **TEL** filter chip.
+- **Accumulate per station in a new drift-backed `TelemetryService`** (ChangeNotifier), mirroring
+  `BulletinService`: an in-memory cache written through to drift, with a synchronous
+  `definitionFor(callsign)` lookup for the UI. Each incoming component merges into a per-station
+  `TelemetryDefinition` aggregate. EQNS scaling is `value = a·v² + b·v + c` per analog channel, with
+  identity defaults (a=0, b=1, c=0) for absent coefficients and tolerance for truncated/garbled
+  fields.
+- **Persist (not in-memory or SharedPreferences).** The packet log is retention-pruned; definitions
+  are slowly-changing and must outlive that window so channels stay labelled across restarts and
+  immediately on launch (rather than waiting hours for the next PARM). Drift keeps consistency with
+  `BulletinService` and avoids hand-rolling serialization of a keyed, growing collection.
+
+### First schema migration (v1 → v2)
+
+This adds the app's **first-ever** schema migration. Until now `schemaVersion` was 1 with `onCreate`
+only — no `onUpgrade` had ever run, and installs carry real packet/message/station data. The change
+is therefore deliberately minimal and **strictly additive**: bump to 2, add a single
+`telemetry_definitions` table (keyed by station), and an `onUpgrade` that does only
+`if (from < 2) m.createTable(telemetryDefinitions)` — no existing data is read or rewritten. A
+migration test pins both paths (fresh `onCreate` at v2, and a forced `user_version = 1` upgrade that
+round-trips a row), because every future migration builds on this precedent.
+
+### Rejected alternatives
+
+- **Keep definitions as `MessagePacket` and intercept in `MessageService`** (the way bulletins are
+  handled): bulletins are *addressee*-detected, but telemetry definitions are *body*-detected, so this
+  would push telemetry knowledge into the message layer and risks the phantom-thread/auto-ACK
+  regression. The distinct subtype is the cleaner seam.
+- **In-memory only / SharedPreferences:** rejected for the retention and consistency reasons above.
+
+### References
+
+- APRS 1.0.1 §13 — telemetry data and definition messages
+- ADR-067 — drift persistence; ADR-057/058/062 — the BulletinService pattern mirrored here
+- `lib/services/telemetry_service.dart`, `lib/models/telemetry_definition.dart`,
+  `lib/database/tables/telemetry_definitions.dart`
+
