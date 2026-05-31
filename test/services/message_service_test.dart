@@ -707,6 +707,9 @@ void main() {
         await Future.delayed(const Duration(milliseconds: 50));
 
         expect(f.service.conversations, isEmpty);
+        // Also assert the unfiltered view, so a hidden/cross-SSID thread can't
+        // slip past the filtered getter.
+        expect(f.service.allConversations, isEmpty);
         expect(f.service.totalUnread, equals(0));
         expect(f.sentLines, isEmpty);
       },
@@ -721,6 +724,7 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 50));
 
       expect(f.service.conversations, isEmpty);
+      expect(f.service.allConversations, isEmpty);
       expect(f.sentLines, isEmpty);
     });
   });

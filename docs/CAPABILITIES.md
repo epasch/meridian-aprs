@@ -4,7 +4,7 @@ A consolidated reference of what Meridian can do today, organized by user-facing
 
 > **Maintenance:** This document is generated and maintained by Claude Code as part of milestone close-out. When a milestone changes user-visible capabilities or platform behavior, update this file alongside `ROADMAP.md` and `DECISIONS.md`. Source of truth is the codebase, not aspiration — partially implemented or untested capabilities are flagged explicitly.
 
-**Last updated:** 2026-05-30 (v0.21 Classic Bluetooth SPP shipped on Android — native RFCOMM channel, ADR-069, hardware-validated on a TH-D75; desktop deferred)
+**Last updated:** 2026-05-31 (telemetry definitions shipped — PARM/UNIT/EQNS/BITS decoded into `TelemetryDefinitionPacket`, accumulated per station by the drift-backed `TelemetryService`, ADR-070; labelled/scaled `T#` channels in the detail sheet)
 
 ---
 
@@ -315,7 +315,7 @@ Y = supported, P = partial / pending validation, — = not supported.
 ## 15. Reference Inventory
 
 - **Architecture overview:** `docs/ARCHITECTURE.md`
-- **Decisions:** `docs/DECISIONS.md` (ADR-001 through ADR-069)
+- **Decisions:** `docs/DECISIONS.md` (ADR-001 through ADR-070)
 - **Roadmap:** `docs/ROADMAP.md`
 - **Future features:** `docs/FUTURE_FEATURES.md`
 - **Theming strategy:** `docs/THEME_PLATFORM_STRATEGY.md`
