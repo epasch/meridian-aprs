@@ -38,7 +38,9 @@ class WxData {
       } else if (m.group(7) != null) {
         wx.rainSinceMidnight = double.tryParse(m.group(7)!);
       } else if (m.group(8) != null) {
-        wx.humidity = int.tryParse(m.group(8)!);
+        // APRS §12: humidity hNN with h00 meaning 100%.
+        final h = int.tryParse(m.group(8)!);
+        if (h != null) wx.humidity = h == 0 ? 100 : h;
       } else if (m.group(9) != null) {
         wx._pressureRaw = double.tryParse(m.group(9)!);
       } else if (m.group(10) != null) {

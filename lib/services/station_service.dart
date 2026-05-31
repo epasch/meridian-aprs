@@ -710,23 +710,42 @@ class StationService extends ChangeNotifier {
     lastHeard: p.receivedAt,
     symbolTable: p.symbolTable,
     symbolCode: p.symbolCode,
-    // A concise human summary — not the raw frame (which lives in rawPacket
-    // and the packet detail sheet). Empty when no fields decoded.
-    comment: _weatherSummary(p),
+    // Canonical APRS wx tokens (c/s/g/t/r/p/P/h/b) reconstructed from the
+    // decoded fields. The map weather overlay and the station sheet both
+    // re-parse this via WxData.parse(comment) — it must carry parseable wx
+    // tokens, not a human-formatted summary or the raw frame.
+    comment: _weatherComment(p),
     type: StationType.weather,
   );
 
-  static String _weatherSummary(WeatherPacket p) {
-    final parts = <String>[];
-    if (p.temperature != null) {
-      parts.add('${p.temperature!.toStringAsFixed(0)}°F');
+  /// Rebuild a `WxData`-parseable token string from a decoded [WeatherPacket].
+  static String _weatherComment(WeatherPacket p) {
+    final b = StringBuffer();
+    // Letter-prefixed field; magnitude zero-padded to [width] digits, with a
+    // leading '-' for negatives (matches WxData's `(-?\d{N})` patterns).
+    void f(String code, num? v, int width) {
+      if (v == null) return;
+      final n = v.round();
+      final mag = n.abs().toString().padLeft(width, '0');
+      b.write(n < 0 ? '$code-$mag' : '$code$mag');
     }
-    if (p.windDirection != null && p.windSpeed != null) {
-      parts.add(
-        'wind ${p.windDirection}°/${p.windSpeed!.toStringAsFixed(0)} mph',
-      );
+
+    f('c', p.windDirection, 3); // wind direction (deg)
+    f('s', p.windSpeed, 3); // sustained wind (mph)
+    f('g', p.windGust, 3); // gust (mph)
+    f('t', p.temperature, 3); // temperature (°F)
+    f('r', p.rainfall1h, 3);
+    f('p', p.rainfall24h, 3);
+    f('P', p.rainSinceMidnight, 3);
+    if (p.humidity != null) {
+      // APRS §12: h00 encodes 100%.
+      final h = p.humidity! >= 100 ? 0 : p.humidity!;
+      b.write('h${h.toString().padLeft(2, '0')}');
     }
-    if (p.humidity != null) parts.add('${p.humidity}% RH');
-    return parts.join(' · ');
+    if (p.pressure != null) {
+      // b is tenths of a millibar (hPa × 10), 5 digits.
+      b.write('b${(p.pressure! * 10).round().toString().padLeft(5, '0')}');
+    }
+    return b.toString();
   }
 }
