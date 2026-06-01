@@ -116,7 +116,8 @@ class BulletinDetailScreen extends StatelessWidget {
     );
   }
 
-  String _formatAbsolute(DateTime dt) {
+  String _formatAbsolute(DateTime dtRaw) {
+    final dt = dtRaw.toLocal();
     final y = dt.year.toString().padLeft(4, '0');
     final m = dt.month.toString().padLeft(2, '0');
     final d = dt.day.toString().padLeft(2, '0');

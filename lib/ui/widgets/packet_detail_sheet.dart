@@ -185,7 +185,7 @@ class PacketDetailSheet extends StatelessWidget {
       m['Relayed via'] = p.thirdPartyVia!;
     }
     m['Received'] = p.receivedAt
-        .toUtc()
+        .toLocal()
         .toString()
         .replaceFirst('.000', '')
         .replaceAll('T', ' ');
@@ -205,7 +205,9 @@ class PacketDetailSheet extends StatelessWidget {
         m['Messaging'] = p.hasMessaging ? 'Yes' : 'No';
         if (p.device != null) m['Device'] = p.device!;
         if (p.comment.isNotEmpty) m['Comment'] = p.comment;
-        if (p.timestamp != null) m['Packet time'] = p.timestamp.toString();
+        if (p.timestamp != null) {
+          m['Packet time'] = p.timestamp!.toLocal().toString();
+        }
 
       case MessagePacket():
         m['Type'] = 'Message';
@@ -241,7 +243,9 @@ class PacketDetailSheet extends StatelessWidget {
         if (p.rainfall24h != null) {
           m['Rainfall 24h'] = '${(p.rainfall24h! / 100).toStringAsFixed(2)} in';
         }
-        if (p.timestamp != null) m['Packet time'] = p.timestamp.toString();
+        if (p.timestamp != null) {
+          m['Packet time'] = p.timestamp!.toLocal().toString();
+        }
 
       case ObjectPacket():
         m['Type'] = 'Object';
@@ -268,7 +272,9 @@ class PacketDetailSheet extends StatelessWidget {
       case StatusPacket():
         m['Type'] = 'Status';
         m['Status'] = p.status;
-        if (p.timestamp != null) m['Packet time'] = p.timestamp.toString();
+        if (p.timestamp != null) {
+          m['Packet time'] = p.timestamp!.toLocal().toString();
+        }
 
       case MicEPacket():
         m['Type'] = 'Mic-E';
