@@ -32,12 +32,24 @@ final class _DayDividerItem extends _ThreadItem {
   final DateTime date;
 }
 
+/// Local-timezone calendar day for [dt], as a midnight `DateTime`.
+///
+/// Timestamps flow through the app as absolute instants (received packets are
+/// stamped in UTC). Day-divider grouping must reflect the operator's *local*
+/// calendar, so we convert to local time before discarding the clock — without
+/// this, a packet received at 02:48 UTC would land on the next day for an
+/// operator in a behind-UTC timezone.
+DateTime localDayKey(DateTime dt) {
+  final local = dt.toLocal();
+  return DateTime(local.year, local.month, local.day);
+}
+
 List<_ThreadItem> _buildThreadItems(List<MessageEntry> messages) {
   if (messages.isEmpty) return const [];
   final items = <_ThreadItem>[];
   DateTime? lastDate;
   for (final m in messages) {
-    final d = DateTime(m.timestamp.year, m.timestamp.month, m.timestamp.day);
+    final d = localDayKey(m.timestamp);
     if (lastDate == null || d != lastDate) {
       items.add(_DayDividerItem(d));
       lastDate = d;
@@ -442,6 +454,37 @@ class _ComposeBarState extends State<_ComposeBar> {
   }
 }
 
+const _dayDividerMonths = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+const _dayDividerWeekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/// Day-divider label for the local day [date] (a [localDayKey] value),
+/// relative to [now] (defaults to the current local time). Returns "Today",
+/// "Yesterday", or a dated form such as "Mon, Jun 1".
+String dayDividerLabel(DateTime date, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final today = DateTime(n.year, n.month, n.day);
+  final yesterday = today.subtract(const Duration(days: 1));
+  if (date == today) return 'Today';
+  if (date == yesterday) return 'Yesterday';
+  final wd = _dayDividerWeekdays[date.weekday - 1];
+  final mo = _dayDividerMonths[date.month - 1];
+  if (date.year == n.year) return '$wd, $mo ${date.day}';
+  return '$wd, $mo ${date.day}, ${date.year}';
+}
+
 /// Centered day marker (e.g. "Today", "Yesterday", "Mon, Apr 20") shown
 /// between message bubbles whenever the calendar date changes.
 class _DayDivider extends StatelessWidget {
@@ -449,33 +492,7 @@ class _DayDivider extends StatelessWidget {
 
   final DateTime date;
 
-  static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  static const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  String _label() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    if (date == today) return 'Today';
-    if (date == yesterday) return 'Yesterday';
-    final wd = _weekdays[date.weekday - 1];
-    final mo = _months[date.month - 1];
-    if (date.year == now.year) return '$wd, $mo ${date.day}';
-    return '$wd, $mo ${date.day}, ${date.year}';
-  }
+  String _label() => dayDividerLabel(date);
 
   @override
   Widget build(BuildContext context) {
